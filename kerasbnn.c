@@ -166,8 +166,13 @@ static inline float kbnn_thermo_normalize_f32(float input, float min_value, floa
         x = 1.0f;
     }
     return x;
-    return x;
 }
+
+#if defined(__clang__) || defined(__GNUC__)
+#define KBNN_ASSUME_ALIGNED(ptr, align) __builtin_assume_aligned((ptr), (align))
+#else
+#define KBNN_ASSUME_ALIGNED(ptr, align) (ptr)
+#endif
 
 static inline int32_t *kbnn_tensor_i32(const kbnn_context *ctx, int32_t tensor_id) {
     return (int32_t *)ctx->tensor_ptrs[tensor_id];
@@ -277,6 +282,10 @@ static inline void kbnn_xnor_accum8(
         *acc6 += last_active - 2 * (int32_t)__builtin_popcountll((x ^ w6[last]) & last_mask);
         *acc7 += last_active - 2 * (int32_t)__builtin_popcountll((x ^ w7[last]) & last_mask);
     }
+}
+
+static inline int32_t kbnn_xnor_dot_masked_word(uint64_t x, uint64_t w, uint64_t mask, int32_t active) {
+    return active - 2 * (int32_t)__builtin_popcountll((x ^ w) & mask);
 }
 
 static void kbnn_exec_thermo_input(const kbnn_context *ctx, const kbnn_thermo_input_params *p) {
@@ -594,39 +603,58 @@ static void kbnn_prepare_binary_input(const kbnn_context *ctx, const kbnn_xnor_c
 #endif
         return;
     }
-    for (int32_t y = 0; y < p->in_h; ++y) {
-        for (int32_t x = 0; x < p->in_w; ++x) {
-            uint64_t *restrict packed = scratch + (((size_t)y * (size_t)p->in_w + (size_t)x) * (size_t)p->channel_words);
-            const size_t base = (((size_t)y * (size_t)p->in_w + (size_t)x) * (size_t)p->in_c);
-            for (int32_t w = 0; w < p->channel_words; ++w) {
-                uint64_t bits = 0ull;
-                const int32_t base_c = w * 64;
-                int32_t limit = p->in_c - base_c;
-                if (limit > 64) {
-                    limit = 64;
+    if (input_f32 != NULL) {
+        const float *restrict input = (const float *)KBNN_ASSUME_ALIGNED(input_f32, 64);
+        const int8_t *restrict act_scale_i8 = p->act_scale_i8;
+        const int8_t *restrict act_bias_i8 = p->act_bias_i8;
+        for (int32_t y = 0; y < p->in_h; ++y) {
+            for (int32_t x = 0; x < p->in_w; ++x) {
+                uint64_t *restrict packed = scratch + (((size_t)y * (size_t)p->in_w + (size_t)x) * (size_t)p->channel_words);
+                const size_t base = (((size_t)y * (size_t)p->in_w + (size_t)x) * (size_t)p->in_c);
+                for (int32_t w = 0; w < p->channel_words; ++w) {
+                    uint64_t bits = 0ull;
+                    const int32_t base_c = w * 64;
+                    int32_t limit = p->in_c - base_c;
+                    if (limit > 64) {
+                        limit = 64;
+                    }
+                    for (int32_t bit = 0; bit < limit; ++bit) {
+                        const int32_t c = base_c + bit;
+                        const float scale = (act_scale_i8 != NULL) ? (float)act_scale_i8[c] : 1.0f;
+                        const float bias = (act_bias_i8 != NULL) ? (float)act_bias_i8[c] : 0.0f;
+                        bits |= (uint64_t)((scale * input[base + (size_t)c] + bias) >= 0.0f) << bit;
+                    }
+                    packed[w] = bits;
                 }
-                for (int32_t bit = 0; bit < limit; ++bit) {
-                    const int32_t c = base_c + bit;
-                    int take_bit;
-                    if (input_f32 != NULL) {
-                        const float x_f = input_f32[base + (size_t)c];
-                        const float scale = (p->act_scale_i8 != NULL) ? (float)p->act_scale_i8[c] : 1.0f;
-                        const float bias = (p->act_bias_i8 != NULL) ? (float)p->act_bias_i8[c] : 0.0f;
-                        take_bit = ((scale * x_f + bias) >= 0.0f);
-                    } else {
-                        int32_t x_q = input_i32[base + (size_t)c];
+            }
+        }
+    } else {
+        const int32_t *restrict input = (const int32_t *)KBNN_ASSUME_ALIGNED(input_i32, 64);
+        const int8_t *restrict act_scale_i8 = p->act_scale_i8;
+        const int8_t *restrict act_bias_i8 = p->act_bias_i8;
+        for (int32_t y = 0; y < p->in_h; ++y) {
+            for (int32_t x = 0; x < p->in_w; ++x) {
+                uint64_t *restrict packed = scratch + (((size_t)y * (size_t)p->in_w + (size_t)x) * (size_t)p->channel_words);
+                const size_t base = (((size_t)y * (size_t)p->in_w + (size_t)x) * (size_t)p->in_c);
+                for (int32_t w = 0; w < p->channel_words; ++w) {
+                    uint64_t bits = 0ull;
+                    const int32_t base_c = w * 64;
+                    int32_t limit = p->in_c - base_c;
+                    if (limit > 64) {
+                        limit = 64;
+                    }
+                    for (int32_t bit = 0; bit < limit; ++bit) {
+                        const int32_t c = base_c + bit;
+                        int32_t x_q = input[base + (size_t)c];
                         if (p->input_cast_fp16) {
                             x_q = kbnn_fx_cast_via_fp16(x_q);
                         }
-                        const int32_t scale_q = (p->act_scale_i8 != NULL) ? (int32_t)p->act_scale_i8[c] : 1;
-                        const int32_t bias_q = (p->act_bias_i8 != NULL) ? (int32_t)p->act_bias_i8[c] * KBNN_FX_ONE : 0;
-                        take_bit = (((int64_t)scale_q * (int64_t)x_q) + (int64_t)bias_q) >= 0;
+                        const int32_t scale_q = (act_scale_i8 != NULL) ? (int32_t)act_scale_i8[c] : 1;
+                        const int32_t bias_q = (act_bias_i8 != NULL) ? (int32_t)act_bias_i8[c] * KBNN_FX_ONE : 0;
+                        bits |= (uint64_t)((((int64_t)scale_q * (int64_t)x_q) + (int64_t)bias_q) >= 0) << bit;
                     }
-                    if (take_bit) {
-                        bits |= (1ull << bit);
-                    }
+                    packed[w] = bits;
                 }
-                packed[w] = bits;
             }
         }
     }
@@ -664,38 +692,55 @@ static void kbnn_prepare_binary_dense_input(const kbnn_context *ctx, const kbnn_
 #endif
         return;
     }
-    for (int32_t outer = 0; outer < p->outer_count; ++outer) {
-        const size_t base = (size_t)outer * (size_t)p->in_dim;
-        uint64_t *restrict packed = scratch + (size_t)outer * (size_t)p->channel_words;
-        for (int32_t w = 0; w < p->channel_words; ++w) {
-            uint64_t bits = 0ull;
-            const int32_t base_c = w * 64;
-            int32_t limit = p->in_dim - base_c;
-            if (limit > 64) {
-                limit = 64;
+    if (input_f32 != NULL) {
+        const float *restrict input = (const float *)KBNN_ASSUME_ALIGNED(input_f32, 64);
+        const int8_t *restrict act_scale_i8 = p->act_scale_i8;
+        const int8_t *restrict act_bias_i8 = p->act_bias_i8;
+        for (int32_t outer = 0; outer < p->outer_count; ++outer) {
+            const size_t base = (size_t)outer * (size_t)p->in_dim;
+            uint64_t *restrict packed = scratch + (size_t)outer * (size_t)p->channel_words;
+            for (int32_t w = 0; w < p->channel_words; ++w) {
+                uint64_t bits = 0ull;
+                const int32_t base_c = w * 64;
+                int32_t limit = p->in_dim - base_c;
+                if (limit > 64) {
+                    limit = 64;
+                }
+                for (int32_t bit = 0; bit < limit; ++bit) {
+                    const int32_t c = base_c + bit;
+                    const float scale = (act_scale_i8 != NULL) ? (float)act_scale_i8[c] : 1.0f;
+                    const float bias = (act_bias_i8 != NULL) ? (float)act_bias_i8[c] : 0.0f;
+                    bits |= (uint64_t)((scale * input[base + (size_t)c] + bias) >= 0.0f) << bit;
+                }
+                packed[w] = bits;
             }
-            for (int32_t bit = 0; bit < limit; ++bit) {
-                const int32_t c = base_c + bit;
-                int take_bit;
-                if (input_f32 != NULL) {
-                    const float x_f = input_f32[base + (size_t)c];
-                    const float scale = (p->act_scale_i8 != NULL) ? (float)p->act_scale_i8[c] : 1.0f;
-                    const float bias = (p->act_bias_i8 != NULL) ? (float)p->act_bias_i8[c] : 0.0f;
-                    take_bit = ((scale * x_f + bias) >= 0.0f);
-                } else {
-                    int32_t x_q = input_i32[base + (size_t)c];
+        }
+    } else {
+        const int32_t *restrict input = (const int32_t *)KBNN_ASSUME_ALIGNED(input_i32, 64);
+        const int8_t *restrict act_scale_i8 = p->act_scale_i8;
+        const int8_t *restrict act_bias_i8 = p->act_bias_i8;
+        for (int32_t outer = 0; outer < p->outer_count; ++outer) {
+            const size_t base = (size_t)outer * (size_t)p->in_dim;
+            uint64_t *restrict packed = scratch + (size_t)outer * (size_t)p->channel_words;
+            for (int32_t w = 0; w < p->channel_words; ++w) {
+                uint64_t bits = 0ull;
+                const int32_t base_c = w * 64;
+                int32_t limit = p->in_dim - base_c;
+                if (limit > 64) {
+                    limit = 64;
+                }
+                for (int32_t bit = 0; bit < limit; ++bit) {
+                    const int32_t c = base_c + bit;
+                    int32_t x_q = input[base + (size_t)c];
                     if (p->input_cast_fp16) {
                         x_q = kbnn_fx_cast_via_fp16(x_q);
                     }
-                    const int32_t scale_q = (p->act_scale_i8 != NULL) ? (int32_t)p->act_scale_i8[c] : 1;
-                    const int32_t bias_q = (p->act_bias_i8 != NULL) ? (int32_t)p->act_bias_i8[c] * KBNN_FX_ONE : 0;
-                    take_bit = (((int64_t)scale_q * (int64_t)x_q) + (int64_t)bias_q) >= 0;
+                    const int32_t scale_q = (act_scale_i8 != NULL) ? (int32_t)act_scale_i8[c] : 1;
+                    const int32_t bias_q = (act_bias_i8 != NULL) ? (int32_t)act_bias_i8[c] * KBNN_FX_ONE : 0;
+                    bits |= (uint64_t)((((int64_t)scale_q * (int64_t)x_q) + (int64_t)bias_q) >= 0) << bit;
                 }
-                if (take_bit) {
-                    bits |= (1ull << bit);
-                }
+                packed[w] = bits;
             }
-            packed[w] = bits;
         }
     }
 #ifdef KBNN_ENABLE_PROFILE
@@ -824,6 +869,198 @@ static void kbnn_exec_xnor_conv2d_3x3_s2_core(
     int32_t last_active
 ) {
     const int32_t kernel_area = 9;
+    if (p->channel_words == 1 && p->pad_top == 1 && p->pad_left == 1) {
+        const uint64_t mask = p->last_word_mask;
+        const size_t in_w = (size_t)p->in_w;
+        const size_t out_w = (size_t)p->out_w;
+        for (int32_t oh = 0; oh < p->out_h; ++oh) {
+            const int32_t base_y = oh * 2 - 1;
+            for (int32_t ow = 0; ow < p->out_w; ++ow) {
+                const int32_t base_x = ow * 2 - 1;
+                const int boundary = (oh == 0) || (ow == 0);
+                int32_t oc = 0;
+                for (; oc + 7 < p->out_c; oc += 8) {
+                    int32_t acc0 = 0, acc1 = 0, acc2 = 0, acc3 = 0;
+                    int32_t acc4 = 0, acc5 = 0, acc6 = 0, acc7 = 0;
+                    const uint64_t *restrict w0 = p->weights_bits + (size_t)(oc + 0) * (size_t)kernel_area;
+                    const uint64_t *restrict w1 = p->weights_bits + (size_t)(oc + 1) * (size_t)kernel_area;
+                    const uint64_t *restrict w2 = p->weights_bits + (size_t)(oc + 2) * (size_t)kernel_area;
+                    const uint64_t *restrict w3 = p->weights_bits + (size_t)(oc + 3) * (size_t)kernel_area;
+                    const uint64_t *restrict w4 = p->weights_bits + (size_t)(oc + 4) * (size_t)kernel_area;
+                    const uint64_t *restrict w5 = p->weights_bits + (size_t)(oc + 5) * (size_t)kernel_area;
+                    const uint64_t *restrict w6 = p->weights_bits + (size_t)(oc + 6) * (size_t)kernel_area;
+                    const uint64_t *restrict w7 = p->weights_bits + (size_t)(oc + 7) * (size_t)kernel_area;
+                    if (!boundary) {
+                        const uint64_t x0 = packed[((size_t)base_y * in_w) + (size_t)base_x];
+                        const uint64_t x1 = packed[((size_t)base_y * in_w) + (size_t)(base_x + 1)];
+                        const uint64_t x2 = packed[((size_t)base_y * in_w) + (size_t)(base_x + 2)];
+                        const uint64_t x3 = packed[(((size_t)base_y + 1) * in_w) + (size_t)base_x];
+                        const uint64_t x4 = packed[(((size_t)base_y + 1) * in_w) + (size_t)(base_x + 1)];
+                        const uint64_t x5 = packed[(((size_t)base_y + 1) * in_w) + (size_t)(base_x + 2)];
+                        const uint64_t x6 = packed[(((size_t)base_y + 2) * in_w) + (size_t)base_x];
+                        const uint64_t x7 = packed[(((size_t)base_y + 2) * in_w) + (size_t)(base_x + 1)];
+                        const uint64_t x8 = packed[(((size_t)base_y + 2) * in_w) + (size_t)(base_x + 2)];
+#define KBNN_ACCUM8_WORD_X(XV, KIDX) \
+                        do { \
+                            acc0 += kbnn_xnor_dot_masked_word((XV), w0[(KIDX)], mask, last_active); \
+                            acc1 += kbnn_xnor_dot_masked_word((XV), w1[(KIDX)], mask, last_active); \
+                            acc2 += kbnn_xnor_dot_masked_word((XV), w2[(KIDX)], mask, last_active); \
+                            acc3 += kbnn_xnor_dot_masked_word((XV), w3[(KIDX)], mask, last_active); \
+                            acc4 += kbnn_xnor_dot_masked_word((XV), w4[(KIDX)], mask, last_active); \
+                            acc5 += kbnn_xnor_dot_masked_word((XV), w5[(KIDX)], mask, last_active); \
+                            acc6 += kbnn_xnor_dot_masked_word((XV), w6[(KIDX)], mask, last_active); \
+                            acc7 += kbnn_xnor_dot_masked_word((XV), w7[(KIDX)], mask, last_active); \
+                        } while (0)
+                        KBNN_ACCUM8_WORD_X(x0, 0);
+                        KBNN_ACCUM8_WORD_X(x1, 1);
+                        KBNN_ACCUM8_WORD_X(x2, 2);
+                        KBNN_ACCUM8_WORD_X(x3, 3);
+                        KBNN_ACCUM8_WORD_X(x4, 4);
+                        KBNN_ACCUM8_WORD_X(x5, 5);
+                        KBNN_ACCUM8_WORD_X(x6, 6);
+                        KBNN_ACCUM8_WORD_X(x7, 7);
+                        KBNN_ACCUM8_WORD_X(x8, 8);
+#undef KBNN_ACCUM8_WORD_X
+                    } else {
+#define KBNN_ACCUM8_WORD_BOUND(IY, IX, KIDX) \
+                        do { \
+                            if ((unsigned)(IY) < (unsigned)p->in_h && (unsigned)(IX) < (unsigned)p->in_w) { \
+                                const uint64_t x = packed[((size_t)(IY) * in_w) + (size_t)(IX)]; \
+                                acc0 += kbnn_xnor_dot_masked_word(x, w0[(KIDX)], mask, last_active); \
+                                acc1 += kbnn_xnor_dot_masked_word(x, w1[(KIDX)], mask, last_active); \
+                                acc2 += kbnn_xnor_dot_masked_word(x, w2[(KIDX)], mask, last_active); \
+                                acc3 += kbnn_xnor_dot_masked_word(x, w3[(KIDX)], mask, last_active); \
+                                acc4 += kbnn_xnor_dot_masked_word(x, w4[(KIDX)], mask, last_active); \
+                                acc5 += kbnn_xnor_dot_masked_word(x, w5[(KIDX)], mask, last_active); \
+                                acc6 += kbnn_xnor_dot_masked_word(x, w6[(KIDX)], mask, last_active); \
+                                acc7 += kbnn_xnor_dot_masked_word(x, w7[(KIDX)], mask, last_active); \
+                            } \
+                        } while (0)
+                        KBNN_ACCUM8_WORD_BOUND(base_y + 0, base_x + 0, 0);
+                        KBNN_ACCUM8_WORD_BOUND(base_y + 0, base_x + 1, 1);
+                        KBNN_ACCUM8_WORD_BOUND(base_y + 0, base_x + 2, 2);
+                        KBNN_ACCUM8_WORD_BOUND(base_y + 1, base_x + 0, 3);
+                        KBNN_ACCUM8_WORD_BOUND(base_y + 1, base_x + 1, 4);
+                        KBNN_ACCUM8_WORD_BOUND(base_y + 1, base_x + 2, 5);
+                        KBNN_ACCUM8_WORD_BOUND(base_y + 2, base_x + 0, 6);
+                        KBNN_ACCUM8_WORD_BOUND(base_y + 2, base_x + 1, 7);
+                        KBNN_ACCUM8_WORD_BOUND(base_y + 2, base_x + 2, 8);
+#undef KBNN_ACCUM8_WORD_BOUND
+                    }
+                    {
+                        const size_t out_base = ((size_t)oh * out_w + (size_t)ow) * (size_t)p->out_c + (size_t)oc;
+                        output[out_base + 0] = kbnn_apply_xnor_affine_f32(acc0, p->alpha_q[oc + 0], p->bias_q[oc + 0]);
+                        output[out_base + 1] = kbnn_apply_xnor_affine_f32(acc1, p->alpha_q[oc + 1], p->bias_q[oc + 1]);
+                        output[out_base + 2] = kbnn_apply_xnor_affine_f32(acc2, p->alpha_q[oc + 2], p->bias_q[oc + 2]);
+                        output[out_base + 3] = kbnn_apply_xnor_affine_f32(acc3, p->alpha_q[oc + 3], p->bias_q[oc + 3]);
+                        output[out_base + 4] = kbnn_apply_xnor_affine_f32(acc4, p->alpha_q[oc + 4], p->bias_q[oc + 4]);
+                        output[out_base + 5] = kbnn_apply_xnor_affine_f32(acc5, p->alpha_q[oc + 5], p->bias_q[oc + 5]);
+                        output[out_base + 6] = kbnn_apply_xnor_affine_f32(acc6, p->alpha_q[oc + 6], p->bias_q[oc + 6]);
+                        output[out_base + 7] = kbnn_apply_xnor_affine_f32(acc7, p->alpha_q[oc + 7], p->bias_q[oc + 7]);
+                    }
+                }
+                for (; oc + 3 < p->out_c; oc += 4) {
+                    int32_t acc0 = 0, acc1 = 0, acc2 = 0, acc3 = 0;
+                    const uint64_t *restrict w0 = p->weights_bits + (size_t)(oc + 0) * (size_t)kernel_area;
+                    const uint64_t *restrict w1 = p->weights_bits + (size_t)(oc + 1) * (size_t)kernel_area;
+                    const uint64_t *restrict w2 = p->weights_bits + (size_t)(oc + 2) * (size_t)kernel_area;
+                    const uint64_t *restrict w3 = p->weights_bits + (size_t)(oc + 3) * (size_t)kernel_area;
+                    if (!boundary) {
+                        const uint64_t x0 = packed[((size_t)base_y * in_w) + (size_t)base_x];
+                        const uint64_t x1 = packed[((size_t)base_y * in_w) + (size_t)(base_x + 1)];
+                        const uint64_t x2 = packed[((size_t)base_y * in_w) + (size_t)(base_x + 2)];
+                        const uint64_t x3 = packed[(((size_t)base_y + 1) * in_w) + (size_t)base_x];
+                        const uint64_t x4 = packed[(((size_t)base_y + 1) * in_w) + (size_t)(base_x + 1)];
+                        const uint64_t x5 = packed[(((size_t)base_y + 1) * in_w) + (size_t)(base_x + 2)];
+                        const uint64_t x6 = packed[(((size_t)base_y + 2) * in_w) + (size_t)base_x];
+                        const uint64_t x7 = packed[(((size_t)base_y + 2) * in_w) + (size_t)(base_x + 1)];
+                        const uint64_t x8 = packed[(((size_t)base_y + 2) * in_w) + (size_t)(base_x + 2)];
+#define KBNN_ACCUM4_WORD_X(XV, KIDX) \
+                        do { \
+                            acc0 += kbnn_xnor_dot_masked_word((XV), w0[(KIDX)], mask, last_active); \
+                            acc1 += kbnn_xnor_dot_masked_word((XV), w1[(KIDX)], mask, last_active); \
+                            acc2 += kbnn_xnor_dot_masked_word((XV), w2[(KIDX)], mask, last_active); \
+                            acc3 += kbnn_xnor_dot_masked_word((XV), w3[(KIDX)], mask, last_active); \
+                        } while (0)
+                        KBNN_ACCUM4_WORD_X(x0, 0);
+                        KBNN_ACCUM4_WORD_X(x1, 1);
+                        KBNN_ACCUM4_WORD_X(x2, 2);
+                        KBNN_ACCUM4_WORD_X(x3, 3);
+                        KBNN_ACCUM4_WORD_X(x4, 4);
+                        KBNN_ACCUM4_WORD_X(x5, 5);
+                        KBNN_ACCUM4_WORD_X(x6, 6);
+                        KBNN_ACCUM4_WORD_X(x7, 7);
+                        KBNN_ACCUM4_WORD_X(x8, 8);
+#undef KBNN_ACCUM4_WORD_X
+                    } else {
+#define KBNN_ACCUM4_WORD_BOUND(IY, IX, KIDX) \
+                        do { \
+                            if ((unsigned)(IY) < (unsigned)p->in_h && (unsigned)(IX) < (unsigned)p->in_w) { \
+                                const uint64_t x = packed[((size_t)(IY) * in_w) + (size_t)(IX)]; \
+                                acc0 += kbnn_xnor_dot_masked_word(x, w0[(KIDX)], mask, last_active); \
+                                acc1 += kbnn_xnor_dot_masked_word(x, w1[(KIDX)], mask, last_active); \
+                                acc2 += kbnn_xnor_dot_masked_word(x, w2[(KIDX)], mask, last_active); \
+                                acc3 += kbnn_xnor_dot_masked_word(x, w3[(KIDX)], mask, last_active); \
+                            } \
+                        } while (0)
+                        KBNN_ACCUM4_WORD_BOUND(base_y + 0, base_x + 0, 0);
+                        KBNN_ACCUM4_WORD_BOUND(base_y + 0, base_x + 1, 1);
+                        KBNN_ACCUM4_WORD_BOUND(base_y + 0, base_x + 2, 2);
+                        KBNN_ACCUM4_WORD_BOUND(base_y + 1, base_x + 0, 3);
+                        KBNN_ACCUM4_WORD_BOUND(base_y + 1, base_x + 1, 4);
+                        KBNN_ACCUM4_WORD_BOUND(base_y + 1, base_x + 2, 5);
+                        KBNN_ACCUM4_WORD_BOUND(base_y + 2, base_x + 0, 6);
+                        KBNN_ACCUM4_WORD_BOUND(base_y + 2, base_x + 1, 7);
+                        KBNN_ACCUM4_WORD_BOUND(base_y + 2, base_x + 2, 8);
+#undef KBNN_ACCUM4_WORD_BOUND
+                    }
+                    {
+                        const size_t out_base = ((size_t)oh * out_w + (size_t)ow) * (size_t)p->out_c + (size_t)oc;
+                        output[out_base + 0] = kbnn_apply_xnor_affine_f32(acc0, p->alpha_q[oc + 0], p->bias_q[oc + 0]);
+                        output[out_base + 1] = kbnn_apply_xnor_affine_f32(acc1, p->alpha_q[oc + 1], p->bias_q[oc + 1]);
+                        output[out_base + 2] = kbnn_apply_xnor_affine_f32(acc2, p->alpha_q[oc + 2], p->bias_q[oc + 2]);
+                        output[out_base + 3] = kbnn_apply_xnor_affine_f32(acc3, p->alpha_q[oc + 3], p->bias_q[oc + 3]);
+                    }
+                }
+                for (; oc < p->out_c; ++oc) {
+                    int32_t acc = 0;
+                    const uint64_t *restrict wrow = p->weights_bits + (size_t)oc * (size_t)kernel_area;
+                    if (!boundary) {
+                        acc += kbnn_xnor_dot_masked_word(packed[((size_t)base_y * in_w) + (size_t)base_x], wrow[0], mask, last_active);
+                        acc += kbnn_xnor_dot_masked_word(packed[((size_t)base_y * in_w) + (size_t)(base_x + 1)], wrow[1], mask, last_active);
+                        acc += kbnn_xnor_dot_masked_word(packed[((size_t)base_y * in_w) + (size_t)(base_x + 2)], wrow[2], mask, last_active);
+                        acc += kbnn_xnor_dot_masked_word(packed[(((size_t)base_y + 1) * in_w) + (size_t)base_x], wrow[3], mask, last_active);
+                        acc += kbnn_xnor_dot_masked_word(packed[(((size_t)base_y + 1) * in_w) + (size_t)(base_x + 1)], wrow[4], mask, last_active);
+                        acc += kbnn_xnor_dot_masked_word(packed[(((size_t)base_y + 1) * in_w) + (size_t)(base_x + 2)], wrow[5], mask, last_active);
+                        acc += kbnn_xnor_dot_masked_word(packed[(((size_t)base_y + 2) * in_w) + (size_t)base_x], wrow[6], mask, last_active);
+                        acc += kbnn_xnor_dot_masked_word(packed[(((size_t)base_y + 2) * in_w) + (size_t)(base_x + 1)], wrow[7], mask, last_active);
+                        acc += kbnn_xnor_dot_masked_word(packed[(((size_t)base_y + 2) * in_w) + (size_t)(base_x + 2)], wrow[8], mask, last_active);
+                    } else {
+#define KBNN_ACCUM1_WORD_BOUND(IY, IX, KIDX) \
+                        do { \
+                            if ((unsigned)(IY) < (unsigned)p->in_h && (unsigned)(IX) < (unsigned)p->in_w) { \
+                                const uint64_t x = packed[((size_t)(IY) * in_w) + (size_t)(IX)]; \
+                                acc += kbnn_xnor_dot_masked_word(x, wrow[(KIDX)], mask, last_active); \
+                            } \
+                        } while (0)
+                        KBNN_ACCUM1_WORD_BOUND(base_y + 0, base_x + 0, 0);
+                        KBNN_ACCUM1_WORD_BOUND(base_y + 0, base_x + 1, 1);
+                        KBNN_ACCUM1_WORD_BOUND(base_y + 0, base_x + 2, 2);
+                        KBNN_ACCUM1_WORD_BOUND(base_y + 1, base_x + 0, 3);
+                        KBNN_ACCUM1_WORD_BOUND(base_y + 1, base_x + 1, 4);
+                        KBNN_ACCUM1_WORD_BOUND(base_y + 1, base_x + 2, 5);
+                        KBNN_ACCUM1_WORD_BOUND(base_y + 2, base_x + 0, 6);
+                        KBNN_ACCUM1_WORD_BOUND(base_y + 2, base_x + 1, 7);
+                        KBNN_ACCUM1_WORD_BOUND(base_y + 2, base_x + 2, 8);
+#undef KBNN_ACCUM1_WORD_BOUND
+                    }
+                    output[(((size_t)oh * out_w + (size_t)ow) * (size_t)p->out_c) + (size_t)oc] =
+                        kbnn_apply_xnor_affine_f32(acc, p->alpha_q[oc], p->bias_q[oc]);
+                }
+            }
+        }
+        return;
+    }
     for (int32_t oh = 0; oh < p->out_h; ++oh) {
         const int32_t base_y = oh * 2 - p->pad_top;
         const int32_t iy0 = base_y;
@@ -1073,6 +1310,7 @@ static void kbnn_exec_xnor_conv2d(const kbnn_context *ctx, const kbnn_xnor_conv2
 static void kbnn_exec_xnor_dense(const kbnn_context *ctx, const kbnn_xnor_dense_params *p) {
     int32_t *restrict output = kbnn_tensor_i32(ctx, p->output_id);
     uint64_t *restrict packed = kbnn_tensor_bits(ctx, p->scratch_id);
+    const int32_t last_active = (int32_t)__builtin_popcountll(p->last_word_mask);
 
     kbnn_prepare_binary_dense_input(ctx, p);
 #ifdef KBNN_ENABLE_PROFILE
@@ -1082,53 +1320,22 @@ static void kbnn_exec_xnor_dense(const kbnn_context *ctx, const kbnn_xnor_dense_
         const uint64_t *restrict in_words = packed + (size_t)outer * (size_t)p->channel_words;
         int32_t oc = 0;
         for (; oc + 7 < p->out_dim; oc += 8) {
-            int32_t acc0 = kbnn_xnor_dot_u64(
+            int32_t acc0 = 0, acc1 = 0, acc2 = 0, acc3 = 0;
+            int32_t acc4 = 0, acc5 = 0, acc6 = 0, acc7 = 0;
+            kbnn_xnor_accum8(
                 in_words,
                 p->weights_bits + (size_t)(oc + 0) * (size_t)p->channel_words,
-                p->channel_words,
-                p->last_word_mask
-            );
-            int32_t acc1 = kbnn_xnor_dot_u64(
-                in_words,
                 p->weights_bits + (size_t)(oc + 1) * (size_t)p->channel_words,
-                p->channel_words,
-                p->last_word_mask
-            );
-            int32_t acc2 = kbnn_xnor_dot_u64(
-                in_words,
                 p->weights_bits + (size_t)(oc + 2) * (size_t)p->channel_words,
-                p->channel_words,
-                p->last_word_mask
-            );
-            int32_t acc3 = kbnn_xnor_dot_u64(
-                in_words,
                 p->weights_bits + (size_t)(oc + 3) * (size_t)p->channel_words,
-                p->channel_words,
-                p->last_word_mask
-            );
-            int32_t acc4 = kbnn_xnor_dot_u64(
-                in_words,
                 p->weights_bits + (size_t)(oc + 4) * (size_t)p->channel_words,
-                p->channel_words,
-                p->last_word_mask
-            );
-            int32_t acc5 = kbnn_xnor_dot_u64(
-                in_words,
                 p->weights_bits + (size_t)(oc + 5) * (size_t)p->channel_words,
-                p->channel_words,
-                p->last_word_mask
-            );
-            int32_t acc6 = kbnn_xnor_dot_u64(
-                in_words,
                 p->weights_bits + (size_t)(oc + 6) * (size_t)p->channel_words,
-                p->channel_words,
-                p->last_word_mask
-            );
-            int32_t acc7 = kbnn_xnor_dot_u64(
-                in_words,
                 p->weights_bits + (size_t)(oc + 7) * (size_t)p->channel_words,
                 p->channel_words,
-                p->last_word_mask
+                p->last_word_mask,
+                last_active,
+                &acc0, &acc1, &acc2, &acc3, &acc4, &acc5, &acc6, &acc7
             );
             output[(size_t)outer * (size_t)p->out_dim + (size_t)(oc + 0)] = kbnn_apply_xnor_affine_f32(acc0, p->alpha_q[oc + 0], p->bias_q[oc + 0]);
             output[(size_t)outer * (size_t)p->out_dim + (size_t)(oc + 1)] = kbnn_apply_xnor_affine_f32(acc1, p->alpha_q[oc + 1], p->bias_q[oc + 1]);
@@ -1140,29 +1347,17 @@ static void kbnn_exec_xnor_dense(const kbnn_context *ctx, const kbnn_xnor_dense_
             output[(size_t)outer * (size_t)p->out_dim + (size_t)(oc + 7)] = kbnn_apply_xnor_affine_f32(acc7, p->alpha_q[oc + 7], p->bias_q[oc + 7]);
         }
         for (; oc + 3 < p->out_dim; oc += 4) {
-            int32_t acc0 = kbnn_xnor_dot_u64(
+            int32_t acc0 = 0, acc1 = 0, acc2 = 0, acc3 = 0;
+            kbnn_xnor_accum4(
                 in_words,
                 p->weights_bits + (size_t)(oc + 0) * (size_t)p->channel_words,
-                p->channel_words,
-                p->last_word_mask
-            );
-            int32_t acc1 = kbnn_xnor_dot_u64(
-                in_words,
                 p->weights_bits + (size_t)(oc + 1) * (size_t)p->channel_words,
-                p->channel_words,
-                p->last_word_mask
-            );
-            int32_t acc2 = kbnn_xnor_dot_u64(
-                in_words,
                 p->weights_bits + (size_t)(oc + 2) * (size_t)p->channel_words,
-                p->channel_words,
-                p->last_word_mask
-            );
-            int32_t acc3 = kbnn_xnor_dot_u64(
-                in_words,
                 p->weights_bits + (size_t)(oc + 3) * (size_t)p->channel_words,
                 p->channel_words,
-                p->last_word_mask
+                p->last_word_mask,
+                last_active,
+                &acc0, &acc1, &acc2, &acc3
             );
             output[(size_t)outer * (size_t)p->out_dim + (size_t)(oc + 0)] = kbnn_apply_xnor_affine_f32(acc0, p->alpha_q[oc + 0], p->bias_q[oc + 0]);
             output[(size_t)outer * (size_t)p->out_dim + (size_t)(oc + 1)] = kbnn_apply_xnor_affine_f32(acc1, p->alpha_q[oc + 1], p->bias_q[oc + 1]);
@@ -1314,19 +1509,65 @@ static void kbnn_exec_qdense(const kbnn_context *ctx, const kbnn_qdense_params *
 #ifdef KBNN_ENABLE_PROFILE
     uint64_t t0 = kbnn_now_ns();
 #endif
-    const int32_t *input = kbnn_tensor_i32(ctx, p->input_id);
-    int32_t *output = kbnn_tensor_i32(ctx, p->output_id);
+    const int32_t *restrict input =
+        (const int32_t *)KBNN_ASSUME_ALIGNED(kbnn_tensor_i32(ctx, p->input_id), 64);
+    int32_t *restrict output =
+        (int32_t *)KBNN_ASSUME_ALIGNED(kbnn_tensor_i32(ctx, p->output_id), 64);
+    const int16_t *restrict weights =
+        (const int16_t *)KBNN_ASSUME_ALIGNED(p->weights, 64);
+    const int32_t *restrict bias_q = p->bias_q;
 
     for (int32_t outer = 0; outer < p->outer_count; ++outer) {
-        const int32_t *src = input + (size_t)outer * (size_t)p->in_dim;
+        const int32_t *restrict src = input + (size_t)outer * (size_t)p->in_dim;
         int32_t *dst = output + (size_t)outer * (size_t)p->out_dim;
         int32_t o = 0;
+        for (; o + 7 < p->out_dim; o += 8) {
+            int64_t acc0 = 0, acc1 = 0, acc2 = 0, acc3 = 0;
+            int64_t acc4 = 0, acc5 = 0, acc6 = 0, acc7 = 0;
+            const int16_t *restrict w0 = weights + (size_t)(o + 0) * (size_t)p->in_dim;
+            const int16_t *restrict w1 = weights + (size_t)(o + 1) * (size_t)p->in_dim;
+            const int16_t *restrict w2 = weights + (size_t)(o + 2) * (size_t)p->in_dim;
+            const int16_t *restrict w3 = weights + (size_t)(o + 3) * (size_t)p->in_dim;
+            const int16_t *restrict w4 = weights + (size_t)(o + 4) * (size_t)p->in_dim;
+            const int16_t *restrict w5 = weights + (size_t)(o + 5) * (size_t)p->in_dim;
+            const int16_t *restrict w6 = weights + (size_t)(o + 6) * (size_t)p->in_dim;
+            const int16_t *restrict w7 = weights + (size_t)(o + 7) * (size_t)p->in_dim;
+            for (int32_t i = 0; i < p->in_dim; ++i) {
+                const int64_t xv = (int64_t)src[i];
+                acc0 += xv * (int64_t)w0[i];
+                acc1 += xv * (int64_t)w1[i];
+                acc2 += xv * (int64_t)w2[i];
+                acc3 += xv * (int64_t)w3[i];
+                acc4 += xv * (int64_t)w4[i];
+                acc5 += xv * (int64_t)w5[i];
+                acc6 += xv * (int64_t)w6[i];
+                acc7 += xv * (int64_t)w7[i];
+            }
+            {
+                const int32_t bias0 = (bias_q != NULL) ? bias_q[o + 0] : 0;
+                const int32_t bias1 = (bias_q != NULL) ? bias_q[o + 1] : 0;
+                const int32_t bias2 = (bias_q != NULL) ? bias_q[o + 2] : 0;
+                const int32_t bias3 = (bias_q != NULL) ? bias_q[o + 3] : 0;
+                const int32_t bias4 = (bias_q != NULL) ? bias_q[o + 4] : 0;
+                const int32_t bias5 = (bias_q != NULL) ? bias_q[o + 5] : 0;
+                const int32_t bias6 = (bias_q != NULL) ? bias_q[o + 6] : 0;
+                const int32_t bias7 = (bias_q != NULL) ? bias_q[o + 7] : 0;
+                dst[o + 0] = kbnn_finalize_linear_output_i32(acc0, bias0, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                dst[o + 1] = kbnn_finalize_linear_output_i32(acc1, bias1, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                dst[o + 2] = kbnn_finalize_linear_output_i32(acc2, bias2, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                dst[o + 3] = kbnn_finalize_linear_output_i32(acc3, bias3, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                dst[o + 4] = kbnn_finalize_linear_output_i32(acc4, bias4, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                dst[o + 5] = kbnn_finalize_linear_output_i32(acc5, bias5, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                dst[o + 6] = kbnn_finalize_linear_output_i32(acc6, bias6, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                dst[o + 7] = kbnn_finalize_linear_output_i32(acc7, bias7, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+            }
+        }
         for (; o + 3 < p->out_dim; o += 4) {
             int64_t acc0 = 0, acc1 = 0, acc2 = 0, acc3 = 0;
-            const int16_t *restrict w0 = p->weights + (size_t)(o + 0) * (size_t)p->in_dim;
-            const int16_t *restrict w1 = p->weights + (size_t)(o + 1) * (size_t)p->in_dim;
-            const int16_t *restrict w2 = p->weights + (size_t)(o + 2) * (size_t)p->in_dim;
-            const int16_t *restrict w3 = p->weights + (size_t)(o + 3) * (size_t)p->in_dim;
+            const int16_t *restrict w0 = weights + (size_t)(o + 0) * (size_t)p->in_dim;
+            const int16_t *restrict w1 = weights + (size_t)(o + 1) * (size_t)p->in_dim;
+            const int16_t *restrict w2 = weights + (size_t)(o + 2) * (size_t)p->in_dim;
+            const int16_t *restrict w3 = weights + (size_t)(o + 3) * (size_t)p->in_dim;
             for (int32_t i = 0; i < p->in_dim; ++i) {
                 const int64_t xv = (int64_t)src[i];
                 acc0 += xv * (int64_t)w0[i];
@@ -1335,10 +1576,10 @@ static void kbnn_exec_qdense(const kbnn_context *ctx, const kbnn_qdense_params *
                 acc3 += xv * (int64_t)w3[i];
             }
             {
-                const int32_t bias0 = (p->bias_q != NULL) ? p->bias_q[o + 0] : 0;
-                const int32_t bias1 = (p->bias_q != NULL) ? p->bias_q[o + 1] : 0;
-                const int32_t bias2 = (p->bias_q != NULL) ? p->bias_q[o + 2] : 0;
-                const int32_t bias3 = (p->bias_q != NULL) ? p->bias_q[o + 3] : 0;
+                const int32_t bias0 = (bias_q != NULL) ? bias_q[o + 0] : 0;
+                const int32_t bias1 = (bias_q != NULL) ? bias_q[o + 1] : 0;
+                const int32_t bias2 = (bias_q != NULL) ? bias_q[o + 2] : 0;
+                const int32_t bias3 = (bias_q != NULL) ? bias_q[o + 3] : 0;
                 dst[o + 0] = kbnn_finalize_linear_output_i32(acc0, bias0, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
                 dst[o + 1] = kbnn_finalize_linear_output_i32(acc1, bias1, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
                 dst[o + 2] = kbnn_finalize_linear_output_i32(acc2, bias2, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
@@ -1347,13 +1588,13 @@ static void kbnn_exec_qdense(const kbnn_context *ctx, const kbnn_qdense_params *
         }
         for (; o < p->out_dim; ++o) {
             int64_t acc = 0;
-            const int16_t *restrict wcol = p->weights + (size_t)o * (size_t)p->in_dim;
+            const int16_t *restrict wcol = weights + (size_t)o * (size_t)p->in_dim;
             for (int32_t i = 0; i < p->in_dim; ++i) {
                 acc += (int64_t)src[i] * (int64_t)wcol[i];
             }
             {
-                const int32_t bias_q = (p->bias_q != NULL) ? p->bias_q[o] : 0;
-                dst[o] = kbnn_finalize_linear_output_i32(acc, bias_q, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                const int32_t bias_val = (bias_q != NULL) ? bias_q[o] : 0;
+                dst[o] = kbnn_finalize_linear_output_i32(acc, bias_val, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
             }
         }
     }
@@ -1374,32 +1615,82 @@ static void kbnn_exec_qact_qdense(const kbnn_context *ctx, const kbnn_qact_qdens
     } else {
         input_i32 = kbnn_tensor_i32(ctx, p->input_id);
     }
-    int32_t *output = kbnn_tensor_i32(ctx, p->output_id);
+    int32_t *restrict output =
+        (int32_t *)KBNN_ASSUME_ALIGNED(kbnn_tensor_i32(ctx, p->output_id), 64);
+    const int16_t *restrict weights =
+        (const int16_t *)KBNN_ASSUME_ALIGNED(p->weights, 64);
+    const int32_t *restrict bias_q = p->bias_q;
     for (int32_t outer = 0; outer < p->outer_count; ++outer) {
         int32_t *dst = output + (size_t)outer * (size_t)p->out_dim;
-        int32_t qbuf_local[4096];
-        int32_t *qbuf = qbuf_local;
+        int32_t qbuf_local[4096] __attribute__((aligned(64)));
+        int32_t *restrict qbuf = qbuf_local;
         if (p->in_dim <= 4096) {
-            for (int32_t i = 0; i < p->in_dim; ++i) {
-                int32_t xv_q;
-                if (input_f32 != NULL) {
-                    xv_q = kbnn_clip_i32((int64_t)lrintf(input_f32[(size_t)outer * (size_t)p->in_dim + (size_t)i] * (float)KBNN_FX_ONE), -KBNN_FX_ONE, KBNN_FX_ONE);
-                } else {
-                    xv_q = input_i32[(size_t)outer * (size_t)p->in_dim + (size_t)i];
+            if (input_f32 != NULL) {
+                const float *restrict src_f = input_f32 + (size_t)outer * (size_t)p->in_dim;
+                for (int32_t i = 0; i < p->in_dim; ++i) {
+                    const int32_t xv_q = kbnn_clip_i32((int64_t)lrintf(src_f[i] * (float)KBNN_FX_ONE), -KBNN_FX_ONE, KBNN_FX_ONE);
+                    qbuf[i] = p->act_signed_mode
+                        ? kbnn_quantize_signed_unit_i32(xv_q, p->act_levels)
+                        : kbnn_quantize_unit_i32(xv_q, p->act_levels);
                 }
-                qbuf[i] = p->act_signed_mode
-                    ? kbnn_quantize_signed_unit_i32(xv_q, p->act_levels)
-                    : kbnn_quantize_unit_i32(xv_q, p->act_levels);
+            } else {
+                const int32_t *restrict src_i32 = input_i32 + (size_t)outer * (size_t)p->in_dim;
+                for (int32_t i = 0; i < p->in_dim; ++i) {
+                    qbuf[i] = p->act_signed_mode
+                        ? kbnn_quantize_signed_unit_i32(src_i32[i], p->act_levels)
+                        : kbnn_quantize_unit_i32(src_i32[i], p->act_levels);
+                }
             }
         }
         int32_t o = 0;
         if (p->in_dim <= 4096) {
+            for (; o + 7 < p->out_dim; o += 8) {
+                int64_t acc0 = 0, acc1 = 0, acc2 = 0, acc3 = 0;
+                int64_t acc4 = 0, acc5 = 0, acc6 = 0, acc7 = 0;
+                const int16_t *restrict w0 = weights + (size_t)(o + 0) * (size_t)p->in_dim;
+                const int16_t *restrict w1 = weights + (size_t)(o + 1) * (size_t)p->in_dim;
+                const int16_t *restrict w2 = weights + (size_t)(o + 2) * (size_t)p->in_dim;
+                const int16_t *restrict w3 = weights + (size_t)(o + 3) * (size_t)p->in_dim;
+                const int16_t *restrict w4 = weights + (size_t)(o + 4) * (size_t)p->in_dim;
+                const int16_t *restrict w5 = weights + (size_t)(o + 5) * (size_t)p->in_dim;
+                const int16_t *restrict w6 = weights + (size_t)(o + 6) * (size_t)p->in_dim;
+                const int16_t *restrict w7 = weights + (size_t)(o + 7) * (size_t)p->in_dim;
+                for (int32_t i = 0; i < p->in_dim; ++i) {
+                    const int64_t xv = (int64_t)qbuf[i];
+                    acc0 += xv * (int64_t)w0[i];
+                    acc1 += xv * (int64_t)w1[i];
+                    acc2 += xv * (int64_t)w2[i];
+                    acc3 += xv * (int64_t)w3[i];
+                    acc4 += xv * (int64_t)w4[i];
+                    acc5 += xv * (int64_t)w5[i];
+                    acc6 += xv * (int64_t)w6[i];
+                    acc7 += xv * (int64_t)w7[i];
+                }
+                {
+                    const int32_t bias0 = (bias_q != NULL) ? bias_q[o + 0] : 0;
+                    const int32_t bias1 = (bias_q != NULL) ? bias_q[o + 1] : 0;
+                    const int32_t bias2 = (bias_q != NULL) ? bias_q[o + 2] : 0;
+                    const int32_t bias3 = (bias_q != NULL) ? bias_q[o + 3] : 0;
+                    const int32_t bias4 = (bias_q != NULL) ? bias_q[o + 4] : 0;
+                    const int32_t bias5 = (bias_q != NULL) ? bias_q[o + 5] : 0;
+                    const int32_t bias6 = (bias_q != NULL) ? bias_q[o + 6] : 0;
+                    const int32_t bias7 = (bias_q != NULL) ? bias_q[o + 7] : 0;
+                    dst[o + 0] = kbnn_finalize_linear_output_i32(acc0, bias0, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                    dst[o + 1] = kbnn_finalize_linear_output_i32(acc1, bias1, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                    dst[o + 2] = kbnn_finalize_linear_output_i32(acc2, bias2, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                    dst[o + 3] = kbnn_finalize_linear_output_i32(acc3, bias3, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                    dst[o + 4] = kbnn_finalize_linear_output_i32(acc4, bias4, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                    dst[o + 5] = kbnn_finalize_linear_output_i32(acc5, bias5, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                    dst[o + 6] = kbnn_finalize_linear_output_i32(acc6, bias6, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                    dst[o + 7] = kbnn_finalize_linear_output_i32(acc7, bias7, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                }
+            }
             for (; o + 3 < p->out_dim; o += 4) {
                 int64_t acc0 = 0, acc1 = 0, acc2 = 0, acc3 = 0;
-                const int16_t *restrict w0 = p->weights + (size_t)(o + 0) * (size_t)p->in_dim;
-                const int16_t *restrict w1 = p->weights + (size_t)(o + 1) * (size_t)p->in_dim;
-                const int16_t *restrict w2 = p->weights + (size_t)(o + 2) * (size_t)p->in_dim;
-                const int16_t *restrict w3 = p->weights + (size_t)(o + 3) * (size_t)p->in_dim;
+                const int16_t *restrict w0 = weights + (size_t)(o + 0) * (size_t)p->in_dim;
+                const int16_t *restrict w1 = weights + (size_t)(o + 1) * (size_t)p->in_dim;
+                const int16_t *restrict w2 = weights + (size_t)(o + 2) * (size_t)p->in_dim;
+                const int16_t *restrict w3 = weights + (size_t)(o + 3) * (size_t)p->in_dim;
                 for (int32_t i = 0; i < p->in_dim; ++i) {
                     const int64_t xv = (int64_t)qbuf[i];
                     acc0 += xv * (int64_t)w0[i];
@@ -1408,10 +1699,10 @@ static void kbnn_exec_qact_qdense(const kbnn_context *ctx, const kbnn_qact_qdens
                     acc3 += xv * (int64_t)w3[i];
                 }
                 {
-                    const int32_t bias0 = (p->bias_q != NULL) ? p->bias_q[o + 0] : 0;
-                    const int32_t bias1 = (p->bias_q != NULL) ? p->bias_q[o + 1] : 0;
-                    const int32_t bias2 = (p->bias_q != NULL) ? p->bias_q[o + 2] : 0;
-                    const int32_t bias3 = (p->bias_q != NULL) ? p->bias_q[o + 3] : 0;
+                    const int32_t bias0 = (bias_q != NULL) ? bias_q[o + 0] : 0;
+                    const int32_t bias1 = (bias_q != NULL) ? bias_q[o + 1] : 0;
+                    const int32_t bias2 = (bias_q != NULL) ? bias_q[o + 2] : 0;
+                    const int32_t bias3 = (bias_q != NULL) ? bias_q[o + 3] : 0;
                     dst[o + 0] = kbnn_finalize_linear_output_i32(acc0, bias0, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
                     dst[o + 1] = kbnn_finalize_linear_output_i32(acc1, bias1, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
                     dst[o + 2] = kbnn_finalize_linear_output_i32(acc2, bias2, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
@@ -1420,19 +1711,19 @@ static void kbnn_exec_qact_qdense(const kbnn_context *ctx, const kbnn_qact_qdens
             }
             for (; o < p->out_dim; ++o) {
                 int64_t acc = 0;
-                const int16_t *restrict wcol = p->weights + (size_t)o * (size_t)p->in_dim;
+                const int16_t *restrict wcol = weights + (size_t)o * (size_t)p->in_dim;
                 for (int32_t i = 0; i < p->in_dim; ++i) {
                     acc += (int64_t)qbuf[i] * (int64_t)wcol[i];
                 }
                 {
-                    const int32_t bias_q = (p->bias_q != NULL) ? p->bias_q[o] : 0;
-                    dst[o] = kbnn_finalize_linear_output_i32(acc, bias_q, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                    const int32_t bias_val = (bias_q != NULL) ? bias_q[o] : 0;
+                    dst[o] = kbnn_finalize_linear_output_i32(acc, bias_val, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
                 }
             }
         } else {
             for (; o < p->out_dim; ++o) {
                 int64_t acc = 0;
-                const int16_t *restrict wcol = p->weights + (size_t)o * (size_t)p->in_dim;
+                const int16_t *restrict wcol = weights + (size_t)o * (size_t)p->in_dim;
                 for (int32_t i = 0; i < p->in_dim; ++i) {
                     int32_t xv_q;
                     if (input_f32 != NULL) {
@@ -1446,8 +1737,8 @@ static void kbnn_exec_qact_qdense(const kbnn_context *ctx, const kbnn_qact_qdens
                     acc += (int64_t)qv * (int64_t)wcol[i];
                 }
                 {
-                    const int32_t bias_q = (p->bias_q != NULL) ? p->bias_q[o] : 0;
-                    dst[o] = kbnn_finalize_linear_output_i32(acc, bias_q, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
+                    const int32_t bias_val = (bias_q != NULL) ? bias_q[o] : 0;
+                    dst[o] = kbnn_finalize_linear_output_i32(acc, bias_val, p->weight_divisor, p->integer_output, p->levels, p->output_scale_q);
                 }
             }
         }

@@ -5,12 +5,9 @@ import keras
 from keras import ops
 
 from kerasbnn.runtime_quant import (
-    fake_quantize_signed_output_exact_ops,
     quantize_signed_int_grid_ops,
     quantize_signed_unit_grid_ops,
-    quantize_signed_unit_interval_exact_ops,
     quantize_to_fixed_grid_ops,
-    quantize_unit_interval_exact_ops,
 )
 
 
@@ -1163,46 +1160,42 @@ class QuantizedDense(keras.layers.Layer):
 
     def call(self, inputs, training=None):
         inputs = ops.cast(inputs, "float32" if training is False else self.compute_dtype)
-        if training is False:
-            if self.binarize_inputs:
-                threshold = ops.cast(self.input_threshold, inputs.dtype)
-                inputs_eff = ops.where(inputs >= threshold, _cast_scalar(1.0, inputs.dtype), _cast_scalar(-1.0, inputs.dtype))
-            else:
-                inputs_eff = quantize_to_fixed_grid_ops(inputs)
-            kernel = ops.convert_to_tensor(self.kernel)
-            if self.integer_kernel:
-                kernel_eff = quantize_signed_int_grid_ops(kernel, levels=self.levels)
-                outputs = ops.matmul(ops.cast(inputs_eff, "float32"), ops.cast(kernel_eff, "float32"))
-                outputs = quantize_to_fixed_grid_ops(outputs)
-            else:
-                kernel_eff = quantize_signed_unit_grid_ops(kernel, levels=self.levels)
-                outputs = ops.matmul(ops.cast(inputs_eff, "float32"), ops.cast(kernel_eff, "float32"))
-                outputs = quantize_to_fixed_grid_ops(outputs / _cast_scalar(self.levels, "float32"))
-            if self.use_bias:
-                bias = ops.cast(ops.convert_to_tensor(self.bias), "float32")
-                if self.quantize_bias and self.integer_output:
-                    bias = fake_quantize_signed_output_exact_ops(bias, levels=self.levels, scale=self.output_scale)
-                bias = quantize_to_fixed_grid_ops(bias)
-                outputs = outputs + bias
-            if self.integer_output:
-                outputs = fake_quantize_signed_output_exact_ops(outputs, levels=self.levels, scale=self.output_scale)
-            if self.activation is not None:
-                outputs = self.activation(outputs)
-            return outputs
         if self.binarize_inputs:
-            inputs_eff = binary_sign_threshold_ste(inputs, threshold=self.input_threshold)
+            if training is False:
+                threshold = ops.cast(self.input_threshold, inputs.dtype)
+                inputs_eff = ops.where(
+                    inputs >= threshold,
+                    _cast_scalar(1.0, inputs.dtype),
+                    _cast_scalar(-1.0, inputs.dtype),
+                )
+            else:
+                inputs_eff = binary_sign_threshold_ste(inputs, threshold=self.input_threshold)
         else:
-            inputs_eff = inputs
+            inputs_eff = quantize_to_fixed_grid_ops(inputs) if training is False else inputs
         kernel = ops.convert_to_tensor(self.kernel)
         if self.integer_kernel:
-            kernel_eff = quantize_signed_int_ste(kernel, levels=self.levels)
+            kernel_eff = (
+                quantize_signed_int_grid_ops(kernel, levels=self.levels)
+                if training is False
+                else quantize_signed_int_ste(kernel, levels=self.levels)
+            )
         else:
-            kernel_eff = quantize_signed_unit_interval_ste(kernel, levels=self.levels)
+            kernel_eff = (
+                quantize_signed_unit_grid_ops(kernel, levels=self.levels)
+                if training is False
+                else quantize_signed_unit_interval_ste(kernel, levels=self.levels)
+            )
         outputs = ops.matmul(inputs_eff, kernel_eff)
+        if training is False:
+            outputs = quantize_to_fixed_grid_ops(
+                outputs if self.integer_kernel else outputs / _cast_scalar(self.levels, outputs.dtype)
+            )
         if self.use_bias:
             bias = ops.cast(ops.convert_to_tensor(self.bias), outputs.dtype)
             if self.quantize_bias and self.integer_output:
                 bias = fake_quantize_signed_output_ste(bias, levels=self.levels, scale=self.output_scale)
+            if training is False:
+                bias = quantize_to_fixed_grid_ops(bias)
             outputs = outputs + bias
         if self.integer_output:
             outputs = fake_quantize_signed_output_ste(outputs, levels=self.levels, scale=self.output_scale)
@@ -1315,64 +1308,31 @@ class QuantizedConv2D(keras.layers.Layer):
 
     def call(self, inputs, training=None):
         inputs = ops.cast(inputs, "float32" if training is False else self.compute_dtype)
-        if training is False:
-            if self.binarize_inputs:
-                threshold = ops.cast(self.input_threshold, inputs.dtype)
-                inputs_eff = ops.where(inputs >= threshold, _cast_scalar(1.0, inputs.dtype), _cast_scalar(-1.0, inputs.dtype))
-            else:
-                inputs_eff = quantize_to_fixed_grid_ops(inputs)
-            kernel = ops.convert_to_tensor(self.kernel)
-            if self.integer_kernel:
-                kernel_eff = quantize_signed_int_grid_ops(kernel, levels=self.levels)
-                outputs = ops.conv(
-                    ops.cast(inputs_eff, "float32"),
-                    ops.cast(kernel_eff, "float32"),
-                    strides=self.strides,
-                    padding=self.padding,
-                    data_format=self.data_format,
-                    dilation_rate=self.dilation_rate,
-                )
-                outputs = quantize_to_fixed_grid_ops(outputs)
-            else:
-                kernel_eff = quantize_signed_unit_grid_ops(kernel, levels=self.levels)
-                outputs = ops.conv(
-                    ops.cast(inputs_eff, "float32"),
-                    ops.cast(kernel_eff, "float32"),
-                    strides=self.strides,
-                    padding=self.padding,
-                    data_format=self.data_format,
-                    dilation_rate=self.dilation_rate,
-                )
-                outputs = quantize_to_fixed_grid_ops(outputs / _cast_scalar(self.levels, "float32"))
-            if self.use_bias:
-                bias = ops.cast(ops.convert_to_tensor(self.bias), "float32")
-                bias = ops.reshape(bias, _conv_bias_shape(self.filters, self.data_format))
-                if self.quantize_bias and self.integer_output:
-                    bias = fake_quantize_signed_output_exact_ops(
-                        bias,
-                        levels=self.levels,
-                        scale=self.output_scale,
-                    )
-                bias = quantize_to_fixed_grid_ops(bias)
-                outputs = outputs + bias
-            if self.integer_output:
-                outputs = fake_quantize_signed_output_exact_ops(
-                    outputs,
-                    levels=self.levels,
-                    scale=self.output_scale,
-                )
-            if self.activation is not None:
-                outputs = self.activation(outputs)
-            return outputs
         if self.binarize_inputs:
-            inputs_eff = binary_sign_threshold_ste(inputs, threshold=self.input_threshold)
+            if training is False:
+                threshold = ops.cast(self.input_threshold, inputs.dtype)
+                inputs_eff = ops.where(
+                    inputs >= threshold,
+                    _cast_scalar(1.0, inputs.dtype),
+                    _cast_scalar(-1.0, inputs.dtype),
+                )
+            else:
+                inputs_eff = binary_sign_threshold_ste(inputs, threshold=self.input_threshold)
         else:
-            inputs_eff = inputs
+            inputs_eff = quantize_to_fixed_grid_ops(inputs) if training is False else inputs
         kernel = ops.convert_to_tensor(self.kernel)
         if self.integer_kernel:
-            kernel_eff = quantize_signed_int_ste(kernel, levels=self.levels)
+            kernel_eff = (
+                quantize_signed_int_grid_ops(kernel, levels=self.levels)
+                if training is False
+                else quantize_signed_int_ste(kernel, levels=self.levels)
+            )
         else:
-            kernel_eff = quantize_signed_unit_interval_ste(kernel, levels=self.levels)
+            kernel_eff = (
+                quantize_signed_unit_grid_ops(kernel, levels=self.levels)
+                if training is False
+                else quantize_signed_unit_interval_ste(kernel, levels=self.levels)
+            )
         outputs = ops.conv(
             inputs_eff,
             kernel_eff,
@@ -1381,6 +1341,10 @@ class QuantizedConv2D(keras.layers.Layer):
             data_format=self.data_format,
             dilation_rate=self.dilation_rate,
         )
+        if training is False:
+            outputs = quantize_to_fixed_grid_ops(
+                outputs if self.integer_kernel else outputs / _cast_scalar(self.levels, outputs.dtype)
+            )
         if self.use_bias:
             bias = ops.cast(ops.convert_to_tensor(self.bias), outputs.dtype)
             bias = ops.reshape(bias, _conv_bias_shape(self.filters, self.data_format))
@@ -1390,6 +1354,8 @@ class QuantizedConv2D(keras.layers.Layer):
                     levels=self.levels,
                     scale=self.output_scale,
                 )
+            if training is False:
+                bias = quantize_to_fixed_grid_ops(bias)
             outputs = outputs + bias
         if self.integer_output:
             outputs = fake_quantize_signed_output_ste(
@@ -1500,8 +1466,8 @@ class QuantizedActivation(keras.layers.Layer):
         if training is False:
             inputs = quantize_to_fixed_grid_ops(inputs)
             if self.signed:
-                return quantize_signed_unit_interval_exact_ops(inputs, levels=self.levels)
-            return quantize_unit_interval_exact_ops(inputs, levels=self.levels)
+                return quantize_signed_unit_interval_ste(inputs, levels=self.levels)
+            return quantize_unit_interval_ste(inputs, levels=self.levels)
         if self.signed:
             return quantize_signed_unit_interval_ste(inputs, levels=self.levels)
         return quantize_unit_interval_ste(inputs, levels=self.levels)

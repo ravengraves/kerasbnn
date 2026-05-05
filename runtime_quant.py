@@ -22,15 +22,6 @@ def _round_to_int_float_ops(x):
     )
 
 
-def _broadcast_channel(values, x, axis: int):
-    rank = len(x.shape)
-    if axis < 0:
-        axis += rank
-    shape = [1] * rank
-    shape[axis] = int(values.shape[0])
-    return ops.reshape(values, tuple(shape))
-
-
 def quantize_symmetric_range_np(x: np.ndarray, max_abs: float, levels: int) -> np.ndarray:
     qmax = float(levels - 1)
     step = max(max_abs / qmax, 1e-6)
@@ -60,30 +51,6 @@ def quantize_to_fixed_grid_ops(x):
     return _round_to_int_float_ops(x * _cast_scalar(FX_ONE, x.dtype)) / _cast_scalar(FX_ONE, x.dtype)
 
 
-def quantize_unit_interval_exact_ops(x, levels=128):
-    levels = int(levels)
-    if levels <= 1:
-        raise ValueError(f"`levels` must be > 1. Got: {levels}")
-    x = ops.cast(x, "float32")
-    zero = _cast_scalar(0.0, x.dtype)
-    levels_f = _cast_scalar(levels, x.dtype)
-    max_unit = _cast_scalar((levels - 1) / levels, x.dtype)
-    clipped = ops.clip(x, zero, max_unit)
-    return ops.floor(clipped * levels_f) / levels_f
-
-
-def quantize_signed_unit_interval_exact_ops(x, levels=128):
-    levels = int(levels)
-    if levels <= 1:
-        raise ValueError(f"`levels` must be > 1. Got: {levels}")
-    x = ops.cast(x, "float32")
-    levels_f = _cast_scalar(levels, x.dtype)
-    min_unit = _cast_scalar(-1.0, x.dtype)
-    max_unit = _cast_scalar((levels - 1) / levels, x.dtype)
-    clipped = ops.clip(x, min_unit, max_unit)
-    return ops.floor(clipped * levels_f) / levels_f
-
-
 def quantize_signed_int_grid_ops(x, levels=128):
     levels = int(levels)
     if levels <= 1:
@@ -102,18 +69,6 @@ def quantize_signed_unit_grid_ops(x, levels=128):
     levels_f = _cast_scalar(levels, x.dtype)
     clipped = ops.clip(x, _cast_scalar(-1.0, x.dtype), _cast_scalar((levels - 1) / levels, x.dtype))
     return ops.floor(clipped * levels_f)
-
-
-def fake_quantize_signed_output_exact_ops(x, levels=128, scale=1.0):
-    levels = int(levels)
-    if levels <= 1:
-        raise ValueError(f"`levels` must be > 1. Got: {levels}")
-    x = ops.cast(x, "float32")
-    qmax_f = _cast_scalar(levels - 1, x.dtype)
-    scale_f = _cast_scalar(scale, x.dtype)
-    scaled = x / scale_f
-    clipped = ops.clip(scaled, -qmax_f, qmax_f)
-    return _round_to_int_float_ops(clipped) * scale_f
 
 
 def quantize_symmetric_range_ops(x, max_abs: float, levels: int):
@@ -326,17 +281,6 @@ def fold_xnor_activation_compare_ops(layer, dtype="float32"):
     return quantize_compare_pair_i8_ops(cmp_scale, cmp_bias)
 
 
-def exact_binary_sign_from_compare_ops(x, scale_i8, bias_i8, axis: int = -1):
-    x = ops.cast(x, "float32")
-    x_q = ops.cast(_round_to_int_float_ops(x * _cast_scalar(FX_ONE, x.dtype)), "int32")
-    scale = _broadcast_channel(ops.cast(scale_i8, "int32"), x_q, axis)
-    bias = _broadcast_channel(ops.cast(bias_i8, "int32"), x_q, axis)
-    score = scale * x_q + bias * ops.cast(FX_ONE, "int32")
-    one = _cast_scalar(1.0, x.dtype)
-    minus_one = _cast_scalar(-1.0, x.dtype)
-    return ops.where(score >= ops.cast(0, "int32"), one, minus_one)
-
-
 def exact_xnor_alpha_bias_ops(layer, kernel, reduce_axes):
     kernel = ops.cast(kernel, "float32")
     alpha = ops.mean(ops.absolute(kernel), axis=reduce_axes, keepdims=True)
@@ -348,46 +292,9 @@ def exact_xnor_alpha_bias_ops(layer, kernel, reduce_axes):
     return alpha, bias
 
 
-def exact_xnor_alpha_bias_q_ops(layer, kernel, reduce_axes):
-    kernel = ops.cast(kernel, "float32")
-    alpha = ops.mean(ops.absolute(kernel), axis=reduce_axes, keepdims=True)
-    alpha_q = ops.cast(_round_to_int_float_ops(alpha * _cast_scalar(FX_ONE, alpha.dtype)), "int32")
-    if layer.bias is None:
-        bias_q = None
-    else:
-        bias = ops.cast(layer.bias, "float32")
-        bias_q = ops.cast(_round_to_int_float_ops(bias * _cast_scalar(FX_ONE, bias.dtype)), "int32")
-    return alpha_q, bias_q
-
-
-def exact_xnor_apply_affine_q_ops(dot, alpha_q, bias_q=None, data_format="channels_last"):
-    dot = ops.cast(dot, "float32")
-    alpha = ops.cast(alpha_q, "float32") / _cast_scalar(FX_ONE, dot.dtype)
-    if len(dot.shape) == 4:
-        channels = int(alpha.shape[0] if len(alpha.shape) == 1 else alpha.shape[-1])
-        if data_format == "channels_last":
-            alpha = ops.reshape(alpha, (1, 1, 1, channels))
-        else:
-            alpha = ops.reshape(alpha, (1, channels, 1, 1))
-    outputs = dot * alpha
-    if bias_q is not None:
-        bias = ops.cast(bias_q, "float32") / _cast_scalar(FX_ONE, dot.dtype)
-        if len(dot.shape) == 4:
-            channels = int(bias.shape[0] if len(bias.shape) == 1 else bias.shape[-1])
-            if data_format == "channels_last":
-                bias = ops.reshape(bias, (1, 1, 1, channels))
-            else:
-                bias = ops.reshape(bias, (1, channels, 1, 1))
-        outputs = outputs + bias
-    return quantize_to_fixed_grid_ops(outputs)
-
-
 __all__ = [
     "FX_SHIFT",
     "FX_ONE",
-    "exact_xnor_alpha_bias_q_ops",
-    "exact_xnor_apply_affine_q_ops",
-    "exact_binary_sign_from_compare_ops",
     "exact_xnor_alpha_bias_ops",
     "fake_quantize_signed_output_np",
     "fold_binary_affine_float_np",

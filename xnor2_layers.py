@@ -14,10 +14,7 @@ from kerasbnn.binary_layers import (
     quantize_unit_interval_ste,
 )
 from kerasbnn.runtime_quant import (
-    exact_binary_sign_from_compare_ops,
-    exact_xnor_apply_affine_q_ops,
-    exact_xnor_alpha_bias_ops,
-    exact_xnor_alpha_bias_q_ops,
+    exact_xnor_alpha_bias_ops as quantized_xnor_alpha_bias_ops,
     fold_xnor_activation_compare_ops,
     quantize_to_fixed_grid_ops,
 )
@@ -201,6 +198,48 @@ def apply_binary_weight_surrogate(
     if mode == "clipped":
         return apply_binary_activation_surrogate(x, mode="clipped", gain=gain)
     raise ValueError(f"Unsupported weight surrogate mode: {mode!r}")
+
+
+def _broadcast_channel_params(values, x, axis: int):
+    axis = int(axis)
+    if axis < 0:
+        axis += len(x.shape)
+    shape = [1] * len(x.shape)
+    shape[axis] = int(values.shape[0])
+    return ops.reshape(values, tuple(shape))
+
+
+def _binary_sign_from_folded_compare(x, scale_i8, bias_i8, axis: int):
+    x = quantize_to_fixed_grid_ops(ops.cast(x, "float32"))
+    scale = _broadcast_channel_params(ops.cast(scale_i8, "float32"), x, axis)
+    bias = _broadcast_channel_params(ops.cast(bias_i8, "float32"), x, axis)
+    return ops.where(
+        scale * x + bias >= _cast_scalar(0.0, x.dtype),
+        _cast_scalar(1.0, x.dtype),
+        _cast_scalar(-1.0, x.dtype),
+    )
+
+
+def _apply_xnor_affine_float(outputs, alpha, bias=None, data_format="channels_last"):
+    outputs = ops.cast(outputs, "float32")
+    alpha = ops.cast(alpha, outputs.dtype)
+    if len(outputs.shape) == 4:
+        channels = int(alpha.shape[0] if len(alpha.shape) == 1 else alpha.shape[-1])
+        if data_format == "channels_last":
+            alpha = ops.reshape(alpha, (1, 1, 1, channels))
+        else:
+            alpha = ops.reshape(alpha, (1, channels, 1, 1))
+    outputs = outputs * alpha
+    if bias is not None:
+        bias = ops.cast(bias, outputs.dtype)
+        if len(outputs.shape) == 4:
+            channels = int(bias.shape[0] if len(bias.shape) == 1 else bias.shape[-1])
+            if data_format == "channels_last":
+                bias = ops.reshape(bias, (1, 1, 1, channels))
+            else:
+                bias = ops.reshape(bias, (1, channels, 1, 1))
+        outputs = outputs + bias
+    return quantize_to_fixed_grid_ops(outputs)
 
 
 @keras.saving.register_keras_serializable(package="XNOR2")
@@ -574,14 +613,13 @@ class XNORBinaryConv2D(keras.layers.Layer, _XNORPreNormMixin):
 
     def call(self, inputs, training=None):
         hist = getattr(inputs, "_keras_history", None)
-        if hist is not None and not hasattr(self, "_exact_input_is_binary_source"):
+        if hist is not None and not hasattr(self, "_input_is_binary_source"):
             src_layer = hist[0]
-            self._exact_input_is_binary_source = (src_layer.__class__.__name__ == "ThermometerBinaryInput")
+            self._input_is_binary_source = (src_layer.__class__.__name__ == "ThermometerBinaryInput")
         if training is False:
             x = ops.cast(inputs, "float32")
-            kernel_eval = ops.cast(self.kernel, "float32")
             feature_axis = -1 if self.data_format == "channels_last" else 1
-            if getattr(self, "_exact_input_is_binary_source", False):
+            if getattr(self, "_input_is_binary_source", False):
                 x_b = ops.where(
                     x >= _cast_scalar(0.0, x.dtype),
                     _cast_scalar(1.0, x.dtype),
@@ -589,9 +627,9 @@ class XNORBinaryConv2D(keras.layers.Layer, _XNORPreNormMixin):
                 )
             else:
                 act_scale_i8, act_bias_i8 = fold_xnor_activation_compare_ops(self, dtype="float32")
-                x_q = quantize_to_fixed_grid_ops(x)
-                x_b = exact_binary_sign_from_compare_ops(x_q, act_scale_i8, act_bias_i8, axis=feature_axis)
-            alpha_q, bias_q = exact_xnor_alpha_bias_q_ops(self, kernel_eval, reduce_axes=(0, 1, 2))
+                x_b = _binary_sign_from_folded_compare(x, act_scale_i8, act_bias_i8, axis=feature_axis)
+            kernel_eval = ops.cast(self.kernel, "float32")
+            alpha_eval, bias_eval = quantized_xnor_alpha_bias_ops(self, kernel_eval, reduce_axes=(0, 1, 2))
             w_b = ops.where(
                 kernel_eval >= _cast_scalar(0.0, kernel_eval.dtype),
                 _cast_scalar(1.0, kernel_eval.dtype),
@@ -631,7 +669,7 @@ class XNORBinaryConv2D(keras.layers.Layer, _XNORPreNormMixin):
             dilation_rate=self.dilation_rate,
         )
         if training is False:
-            outputs = exact_xnor_apply_affine_q_ops(outputs, alpha_q, bias_q, data_format=self.data_format)
+            outputs = _apply_xnor_affine_float(outputs, alpha_eval, bias_eval, data_format=self.data_format)
         else:
             alpha = ops.cast(alpha, x_b.dtype)
             outputs = outputs * ops.cast(alpha, outputs.dtype)
@@ -813,12 +851,12 @@ class XNORBinaryDense(keras.layers.Layer, _XNORPreNormMixin):
 
     def call(self, inputs, training=None):
         hist = getattr(inputs, "_keras_history", None)
-        if hist is not None and not hasattr(self, "_exact_input_is_binary_source"):
+        if hist is not None and not hasattr(self, "_input_is_binary_source"):
             src_layer = hist[0]
-            self._exact_input_is_binary_source = (src_layer.__class__.__name__ == "ThermometerBinaryInput")
+            self._input_is_binary_source = (src_layer.__class__.__name__ == "ThermometerBinaryInput")
         if training is False:
             x = ops.cast(inputs, "float32")
-            if getattr(self, "_exact_input_is_binary_source", False):
+            if getattr(self, "_input_is_binary_source", False):
                 x_b = ops.where(
                     x >= _cast_scalar(0.0, x.dtype),
                     _cast_scalar(1.0, x.dtype),
@@ -826,10 +864,9 @@ class XNORBinaryDense(keras.layers.Layer, _XNORPreNormMixin):
                 )
             else:
                 act_scale_i8, act_bias_i8 = fold_xnor_activation_compare_ops(self, dtype="float32")
-                x_q = quantize_to_fixed_grid_ops(x)
-                x_b = exact_binary_sign_from_compare_ops(x_q, act_scale_i8, act_bias_i8, axis=-1)
+                x_b = _binary_sign_from_folded_compare(x, act_scale_i8, act_bias_i8, axis=-1)
             kernel_eval = ops.cast(self.kernel, "float32")
-            alpha_q, bias_q = exact_xnor_alpha_bias_q_ops(self, kernel_eval, reduce_axes=0)
+            alpha_eval, bias_eval = quantized_xnor_alpha_bias_ops(self, kernel_eval, reduce_axes=0)
             w_b = ops.where(
                 kernel_eval >= _cast_scalar(0.0, kernel_eval.dtype),
                 _cast_scalar(1.0, kernel_eval.dtype),
@@ -858,7 +895,7 @@ class XNORBinaryDense(keras.layers.Layer, _XNORPreNormMixin):
             x_b = ops.cast(x_b, "float32")
             w_b = ops.cast(w_b, "float32")
             outputs = ops.matmul(x_b, w_b)
-            outputs = exact_xnor_apply_affine_q_ops(outputs, alpha_q, bias_q, data_format=self.data_format)
+            outputs = _apply_xnor_affine_float(outputs, alpha_eval, bias_eval, data_format=self.data_format)
         else:
             w_b = ops.cast(w_b, x_b.dtype)
             alpha = ops.cast(alpha, x_b.dtype)

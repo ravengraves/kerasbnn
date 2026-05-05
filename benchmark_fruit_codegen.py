@@ -36,6 +36,31 @@ from binary_yolo.train_tinier import _prepare_split_samples
 REPO_ROOT = Path("/home/claude/source/yolovxnor")
 
 
+def _op_target_summary(op: dict) -> dict:
+    summary = {
+        "name": op.get("name"),
+        "kind": op.get("kind"),
+        "shape": op.get("shape"),
+    }
+    for key in (
+        "in_shape",
+        "kernel",
+        "stride",
+        "out_channels",
+        "channel_words",
+        "outer_count",
+        "in_dim",
+        "out_dim",
+        "levels",
+        "act_levels",
+        "weight_divisor",
+        "input_is_packed_binary",
+    ):
+        if key in op:
+            summary[key] = op[key]
+    return summary
+
+
 def parse_args():
     ap = argparse.ArgumentParser(description="Benchmark exported C runtime for the best fruits XNOR2 model.")
     ap.add_argument("--run-dir", default=str(DEFAULT_RUN_DIR))
@@ -124,7 +149,7 @@ def _compile_bench_export(
             }}
 
             int run_model(const float *input, {out_args}) {{
-                static unsigned char arena[{arena_bytes}];
+                static unsigned char arena[{arena_bytes}] __attribute__((aligned(64)));
                 kbnn_context ctx;
                 int rc = kbnn_context_init(&ctx, &{model_name}, arena, sizeof(arena));
                 if (rc != 0) return rc;
@@ -138,7 +163,7 @@ def _compile_bench_export(
             }}
 
             double bench_single_image(const float *input, int iterations, int32_t *checksum) {{
-                static unsigned char arena[{arena_bytes}];
+                static unsigned char arena[{arena_bytes}] __attribute__((aligned(64)));
                 kbnn_context ctx;
                 int rc = kbnn_context_init(&ctx, &{model_name}, arena, sizeof(arena));
                 if (rc != 0) return -1.0;
@@ -161,7 +186,7 @@ def _compile_bench_export(
             }}
 
             double bench_image_set(const float *inputs, int image_count, int iterations, int32_t *checksum) {{
-                static unsigned char arena[{arena_bytes}];
+                static unsigned char arena[{arena_bytes}] __attribute__((aligned(64)));
                 kbnn_context ctx;
                 int rc = kbnn_context_init(&ctx, &{model_name}, arena, sizeof(arena));
                 if (rc != 0) return -1.0;
@@ -368,7 +393,7 @@ def main():
                 #include "fruit_bench_model_export.h"
 
                 int bench_profile_single_image(const float *input, int iterations, kbnn_profile *profile_out, int32_t *checksum) {{
-                    static unsigned char arena[{int(meta["arena_bytes"])}];
+                    static unsigned char arena[{int(meta["arena_bytes"])}] __attribute__((aligned(64)));
                     kbnn_context ctx;
                     int rc = kbnn_context_init(&ctx, &fruit_bench_model, arena, sizeof(arena));
                     if (rc != 0) return rc;
@@ -461,6 +486,7 @@ def main():
                 "per_call_us": (op_ns / max(1, int(profile.op_calls[idx]))) / 1e3,
                 "calls": int(profile.op_calls[idx]),
                 "share": op_ns / max(1, int(profile.total_ns)),
+                "target": _op_target_summary(op),
             }
         )
     op_profiles.sort(key=lambda x: x["total_ms"], reverse=True)
@@ -480,6 +506,7 @@ def main():
         "upsample2d_ms": profile.upsample2d_ns / 1e6,
         "thermo_input_ms": profile.thermo_input_ns / 1e6,
         "quantized_input_ms": profile.quantized_input_ns / 1e6,
+        "layer_targets": [_op_target_summary(op) for op in meta["ops"]],
         "top_ops": op_profiles[:16],
     }
 

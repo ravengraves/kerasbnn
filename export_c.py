@@ -10,11 +10,8 @@ import numpy as np
 from kerasbnn.runtime_quant import (
     FX_ONE,
     fake_quantize_signed_output_np as _fake_quantize_signed_output,
-    fold_binary_affine_float_np as _fold_binary_affine_float,
     fold_binary_affine_float_ops as _fold_binary_affine_float_ops,
     fold_xnor_activation_compare_ops as _fold_xnor_activation_compare_ops,
-    quantize_positive_range_np as _quantize_positive_range,
-    quantize_symmetric_range_np as _quantize_symmetric_range,
 )
 
 
@@ -193,13 +190,13 @@ class ExportBuilder:
                 offset = 0
             elif kind == "KBNN_TENSOR_I32":
                 nbytes = int(np.prod(shape, dtype=np.int64)) * 4
-                offset = _align_up(self.arena_offset, 16)
+                offset = _align_up(self.arena_offset, 64)
                 self.arena_offset = offset + nbytes
             elif kind == "KBNN_TENSOR_PACKED_BINARY":
                 spatial = int(np.prod(shape[:-1], dtype=np.int64)) if len(shape) > 1 else 1
                 words = words_per_point or int(math.ceil(shape[-1] / 64.0))
                 nbytes = spatial * words * 8
-                offset = _align_up(self.arena_offset, 16)
+                offset = _align_up(self.arena_offset, 64)
                 self.arena_offset = offset + nbytes
                 words_per_point = words
             else:
@@ -387,7 +384,17 @@ def lower_model(model, model_name: str = "kerasbnn_model", array_overrides: dict
                     f".weights = {w_name}",
                     f".bias_q = {b_name}",
                 ],
-                json_payload={"input": input_ids[0], "output": tensor_id, "shape": output_shape},
+                json_payload={
+                    "input": input_ids[0],
+                    "output": tensor_id,
+                    "shape": output_shape,
+                    "in_shape": list(in_shape),
+                    "kernel": [kernel_h, kernel_w],
+                    "stride": [stride_h, stride_w],
+                    "out_channels": int(output_shape[2]),
+                    "input_is_packed_binary": bool(input_is_packed),
+                    "weight_divisor": int(weight_divisor),
+                },
             )
             continue
 
@@ -450,7 +457,17 @@ def lower_model(model, model_name: str = "kerasbnn_model", array_overrides: dict
                     f".act_bias_i8 = {act_bias_name}",
                     f".input_cast_fp16 = 0",
                 ],
-                json_payload={"input": input_ids[0], "output": tensor_id, "shape": output_shape},
+                json_payload={
+                    "input": input_ids[0],
+                    "output": tensor_id,
+                    "shape": output_shape,
+                    "in_shape": list(in_shape),
+                    "kernel": [kernel_h, kernel_w],
+                    "stride": [stride_h, stride_w],
+                    "out_channels": int(output_shape[2]),
+                    "channel_words": int(math.ceil(in_shape[2] / 64.0)),
+                    "scratch_id": int(scratch_id),
+                },
             )
             continue
 
@@ -493,7 +510,15 @@ def lower_model(model, model_name: str = "kerasbnn_model", array_overrides: dict
                     f".act_bias_i8 = {act_bias_name}",
                     f".input_cast_fp16 = 0",
                 ],
-                json_payload={"input": input_ids[0], "output": tensor_id, "shape": output_shape},
+                json_payload={
+                    "input": input_ids[0],
+                    "output": tensor_id,
+                    "shape": output_shape,
+                    "outer_count": int(outer_count),
+                    "in_dim": int(in_dim),
+                    "out_dim": int(output_shape[-1]),
+                    "channel_words": int(math.ceil(in_dim / 64.0)),
+                },
             )
             continue
 
@@ -653,7 +678,16 @@ def lower_model(model, model_name: str = "kerasbnn_model", array_overrides: dict
                         f".weights = {w_name}",
                         f".bias_q = {b_name}",
                     ],
-                    json_payload={"input": input_ids[0], "output": tensor_id, "shape": output_shape},
+                    json_payload={
+                        "input": input_ids[0],
+                        "output": tensor_id,
+                        "shape": output_shape,
+                        "outer_count": int(outer_count),
+                        "in_dim": int(in_shape[-1]),
+                        "out_dim": int(output_shape[-1]),
+                        "act_levels": int(fused_act.levels),
+                        "weight_divisor": int(weight_divisor),
+                    },
                 )
                 continue
             builder.add_op(
@@ -673,7 +707,15 @@ def lower_model(model, model_name: str = "kerasbnn_model", array_overrides: dict
                     f".weights = {w_name}",
                     f".bias_q = {b_name}",
                 ],
-                json_payload={"input": input_ids[0], "output": tensor_id, "shape": output_shape},
+                json_payload={
+                    "input": input_ids[0],
+                    "output": tensor_id,
+                    "shape": output_shape,
+                    "outer_count": int(outer_count),
+                    "in_dim": int(in_shape[-1]),
+                    "out_dim": int(output_shape[-1]),
+                    "weight_divisor": int(weight_divisor),
+                },
             )
             continue
 
@@ -684,7 +726,7 @@ def lower_model(model, model_name: str = "kerasbnn_model", array_overrides: dict
 
 
 def _render_array(array: ArrayDef) -> str:
-    lines = [f"static const {array.c_type} {array.name}[] = {{"]
+    lines = [f"static const {array.c_type} {array.name}[] __attribute__((aligned(64))) = {{"]
     row = []
     for idx, value in enumerate(array.values):
         row.append(value)
@@ -815,6 +857,6 @@ def export_model_to_c(
     builder = lower_model(model, model_name=model_name, array_overrides=array_overrides)
     header_path = output_dir / f"{model_name}_export.h"
     json_path = output_dir / f"{model_name}_export.json"
-    header_path.write_text(_render_header(builder))
-    json_path.write_text(json.dumps(_render_json(builder), indent=2, sort_keys=True))
+    header_path.write_text(_render_header(builder) + "\n")
+    json_path.write_text(json.dumps(_render_json(builder), indent=2, sort_keys=True) + "\n")
     return {"header": header_path, "json": json_path}
