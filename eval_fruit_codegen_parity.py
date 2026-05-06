@@ -1,26 +1,22 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import csv
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
-import textwrap
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 os.environ.setdefault("JAX_DISABLE_JIT", "1")
 
-import keras
 import h5py
 import numpy as np
 
 sys.path.insert(0, "/home/claude/source/yolovxnor")
 
-from kerasbnn.export_c import FX_ONE, export_model_to_c
+from kerasbnn.generated_runtime import predict_bundle_outputs
 from kerasbnn.export_calibration import build_export_array_overrides
 from binary_yolo.tinier_yolo_xnor2 import TinierXNOR2Config, build_binary_tinier_yolov3_xnor2
 from binary_yolo.train_tinier import _prepare_split_samples
@@ -161,66 +157,6 @@ def _manual_load_named_weights(model, weights_path: Path) -> None:
                     layer.affine_norm.set_weights(_h5_arrays(affine_vars))
 
 
-def _compile_shared_export(output_dir: Path, model_name: str, arena_bytes: int, outputs: list[int], counts: list[int]) -> Path:
-    out_args = ", ".join([f"int32_t *out{i}" for i in range(len(outputs))])
-    copies = "\n".join(
-        [
-            f"        memcpy(out{i}, kbnn_context_get_output_i32(&ctx, {tensor_id}), sizeof(int32_t) * {count});"
-            for i, (tensor_id, count) in enumerate(zip(outputs, counts))
-        ]
-    )
-    wrapper = output_dir / f"{model_name}_wrapper.c"
-    wrapper.write_text(
-        textwrap.dedent(
-            f"""
-            #include <string.h>
-            #include "kerasbnn.h"
-            #include "{model_name}_export.h"
-
-            int run_model(const float *input, {out_args}) {{
-                static unsigned char arena[{arena_bytes}];
-                kbnn_context ctx;
-                int rc = kbnn_context_init(&ctx, &{model_name}, arena, sizeof(arena));
-                if (rc != 0) return rc;
-                kbnn_context_set_input_f32(&ctx, 0, input);
-                rc = kbnn_model_run(&ctx);
-                if (rc == 0) {{
-            {copies}
-                }}
-                kbnn_context_release(&ctx);
-                return rc;
-            }}
-            """
-        ).strip()
-        + "\n"
-    )
-    lib_path = output_dir / f"lib{model_name}.so"
-    cmd = [
-        "clang",
-        "-shared",
-        "-fPIC",
-        "-Ofast",
-        "-march=native",
-        "-std=c11",
-        "-Wall",
-        "-Wextra",
-        "-pedantic",
-        "-ffast-math",
-        "-fno-math-errno",
-        "-funroll-loops",
-        "-fomit-frame-pointer",
-        f"-I{REPO_ROOT}",
-        f"-I{REPO_ROOT / 'kerasbnn'}",
-        str(wrapper),
-        str(REPO_ROOT / "kerasbnn" / "kerasbnn.c"),
-        "-lm",
-        "-o",
-        str(lib_path),
-    ]
-    subprocess.run(cmd, check=True)
-    return lib_path
-
-
 def _predict_c_runtime(
     model,
     images: np.ndarray,
@@ -228,31 +164,14 @@ def _predict_c_runtime(
     model_name: str,
     array_overrides: dict[str, np.ndarray] | None = None,
 ) -> tuple[dict[str, np.ndarray], dict]:
-    outputs = export_model_to_c(model, export_dir, model_name=model_name, array_overrides=array_overrides)
-    meta = json.loads(outputs["json"].read_text())
-    output_ids = [int(v) for v in meta["outputs"]]
-    counts = [int(np.prod(meta["tensors"][tensor_id]["shape"])) for tensor_id in output_ids]
-    names = [meta["tensors"][tensor_id]["name"] for tensor_id in output_ids]
-    lib_path = _compile_shared_export(export_dir, model_name, int(meta["arena_bytes"]), output_ids, counts)
-
-    dll = ctypes.CDLL(str(lib_path))
-    dll.run_model.argtypes = [ctypes.POINTER(ctypes.c_float)] + [ctypes.POINTER(ctypes.c_int32)] * len(output_ids)
-    dll.run_model.restype = ctypes.c_int
-
-    accum: dict[str, list[np.ndarray]] = {name: [] for name in names}
-    for image in images:
-        out_bufs = [np.zeros((count,), dtype=np.int32) for count in counts]
-        args = [image.astype(np.float32).ctypes.data_as(ctypes.POINTER(ctypes.c_float))] + [
-            buf.ctypes.data_as(ctypes.POINTER(ctypes.c_int32)) for buf in out_bufs
-        ]
-        rc = dll.run_model(*args)
-        if rc != 0:
-            raise RuntimeError(f"C runtime returned error code {rc}")
-        for name, tensor_id, buf in zip(names, output_ids, out_bufs):
-            shape = tuple(meta["tensors"][tensor_id]["shape"])
-            accum[name].append((buf.astype(np.float32) / FX_ONE).reshape(shape))
-
-    return {name: np.stack(values, axis=0) for name, values in accum.items()}, meta
+    return predict_bundle_outputs(
+        model,
+        images=images,
+        output_dir=export_dir,
+        model_name=model_name,
+        repo_root=REPO_ROOT,
+        array_overrides=array_overrides,
+    )
 
 
 def _map50(samples, preds: dict[str, np.ndarray], anchors: np.ndarray, args, num_classes: int) -> float:

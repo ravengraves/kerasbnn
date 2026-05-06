@@ -78,3 +78,100 @@ from kerasbnn.compat import remap_serialized_keras_config
 
 config = remap_serialized_keras_config(config)
 ```
+
+## C Export
+
+`kerasbnn` also provides a generic C11 export path for supported binary /
+quantized Keras models.
+
+Supported lowered layer families:
+- `InputLayer`
+- `Activation`, `Reshape`, `Flatten`
+- `ThermometerBinaryInput`
+- `QuantizedInput`
+- `QuantizedActivation`
+- `QuantizedConv2D`
+- `QuantizedDense`
+- fused `QuantizedActivation -> QuantizedDense`
+- `XNORBinaryConv2D`
+- `XNORBinaryDense`
+- `BinaryAffineNorm`
+- `SpaceToDepth`
+- `Concatenate`
+- `UpSampling2D`
+- `Add`
+
+Python API:
+
+```python
+from kerasbnn import export_model_bundle
+
+artifacts = export_model_bundle(model, "out/export", model_name="my_bnn")
+```
+
+This writes:
+- `my_bnn_export.h`
+- `my_bnn_export.json`
+- `my_bnn_runtime.c`
+- `my_bnn_example_main.c`
+
+CLI for serialized `.keras` / `.h5` models:
+
+```bash
+python -m kerasbnn.export_codegen \
+  --model path/to/model.keras \
+  --output-dir out/export \
+  --model-name my_bnn
+```
+
+The generated header stores packed binary weights as hex `uint64_t` arrays and
+quantized tensors as integer arrays. The runtime/example sources compile
+against `kerasbnn.c` / `kerasbnn.h`.
+
+## Detector Utilities
+
+For YOLO-style detectors, `kerasbnn` also ships optional detector-side C
+utilities:
+
+- `kerasbnn/yolo_postprocess.h`
+- `kerasbnn/yolo_postprocess.c`
+
+These are intentionally separate from the generic exporter/runtime:
+
+- `kerasbnn.c` remains model-agnostic
+- `yolo_postprocess.c` only decodes raw detector head tensors and runs NMS
+
+Supported detector output layout:
+
+- each head is an `int32` Q12 tensor from `kbnn_context_get_output_i32()`
+- shape: `[grid_h, grid_w, anchors_per_cell, 5 + num_classes]`
+- decode modes:
+  - `KBNN_YOLO_BOX_LINEAR`
+  - `KBNN_YOLO_BOX_LINEAR_FLOAT`
+  - `KBNN_YOLO_BOX_YOLO`
+- class score modes:
+  - `KBNN_YOLO_CLASS_BCE`
+  - `KBNN_YOLO_CLASS_SOFTMAX`
+
+`binary_yolo/export_tinier_xnor2_c.py` can layer a detector-specific example on
+top of the generic export bundle when anchors are available. It emits:
+
+- `{model_name}_yolo_config.h`
+- `{model_name}_yolo_demo.c`
+
+The generated demo uses the vendored stb image loader at:
+
+- `kerasbnn/third_party/stb/stb_image.h`
+
+and can be compiled alongside:
+
+- `{model_name}_runtime.c`
+- `kerasbnn.c`
+- `yolo_postprocess.c`
+
+The demo intentionally keeps preprocessing simple:
+
+- RGB load through stb
+- direct resize to the model input size
+- float `[0, 1]` normalization
+- detector decode + NMS through `yolo_postprocess.c`

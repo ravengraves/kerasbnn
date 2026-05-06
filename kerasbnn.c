@@ -1441,6 +1441,24 @@ static void kbnn_exec_concat(const kbnn_context *ctx, const kbnn_concat_params *
 #endif
 }
 
+static void kbnn_exec_add(const kbnn_context *ctx, const kbnn_add_params *p) {
+#ifdef KBNN_ENABLE_PROFILE
+    uint64_t t0 = kbnn_now_ns();
+#endif
+    int32_t *output = kbnn_tensor_i32(ctx, p->output_id);
+    const size_t count = kbnn_numel_from_shape(p->shape, p->rank);
+    memset(output, 0, count * sizeof(int32_t));
+    for (int32_t input_idx = 0; input_idx < p->input_count; ++input_idx) {
+        const int32_t *src = kbnn_tensor_i32(ctx, p->input_ids[input_idx]);
+        for (size_t i = 0; i < count; ++i) {
+            output[i] += src[i];
+        }
+    }
+#ifdef KBNN_ENABLE_PROFILE
+    ((kbnn_context *)ctx)->profile.add_ns += kbnn_now_ns() - t0;
+#endif
+}
+
 static void kbnn_exec_upsample2d(const kbnn_context *ctx, const kbnn_upsample2d_params *p) {
 #ifdef KBNN_ENABLE_PROFILE
     uint64_t t0 = kbnn_now_ns();
@@ -1860,6 +1878,9 @@ int kbnn_model_run(kbnn_context *ctx) {
                 break;
             case KBNN_OP_QACT_QDENSE:
                 kbnn_exec_qact_qdense(ctx, (const kbnn_qact_qdense_params *)op->params);
+                break;
+            case KBNN_OP_ADD:
+                kbnn_exec_add(ctx, (const kbnn_add_params *)op->params);
                 break;
             default:
                 return -2;

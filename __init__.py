@@ -8,7 +8,7 @@ from kerasbnn.inputs import *  # noqa: F401,F403
 from kerasbnn.quantization import *  # noqa: F401,F403
 from kerasbnn.layers import *  # noqa: F401,F403
 from kerasbnn.compat import *  # noqa: F401,F403
-from kerasbnn.export_c import export_model_to_c  # noqa: F401
+from kerasbnn.export_c import export_model_bundle, export_model_to_c  # noqa: F401
 
 from kerasbnn.constraints import __all__ as _constraints_all
 from kerasbnn.surrogates import __all__ as _surrogates_all
@@ -28,5 +28,5 @@ __all__ = (
     + _quantization_all
     + _layers_all
     + _compat_all
-    + ["export_model_to_c"]
+    + ["export_model_to_c", "export_model_bundle"]
 )

@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import ctypes
-import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
-import textwrap
 
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 os.environ.setdefault("JAX_DISABLE_JIT", "1")
@@ -17,7 +14,8 @@ import numpy as np
 
 sys.path.insert(0, "/home/claude/source/yolovxnor")
 
-from kerasbnn.export_c import FX_ONE, export_model_to_c  # noqa: E402
+from kerasbnn.export_c import FX_ONE  # noqa: E402
+from kerasbnn.generated_runtime import compile_bundle_runner, export_bundle_meta  # noqa: E402
 from kerasbnn.runtime_quant import fold_xnor_activation_compare_np, quantize_to_fixed_grid_np  # noqa: E402
 from kerasbnn.xnor2_layers import XNORBinaryConv2D, XNORBinaryDense  # noqa: E402
 from binary_yolo.tinier_yolo_xnor2 import TinierXNOR2Config, build_binary_tinier_yolov3_xnor2  # noqa: E402
@@ -26,74 +24,19 @@ from binary_yolo.tinier_yolo_xnor2 import TinierXNOR2Config, build_binary_tinier
 REPO_ROOT = Path("/home/claude/source/yolovxnor")
 
 
-def _compile_shared_export(output_dir: Path, model_name: str, arena_bytes: int, outputs: list[int], counts: list[int]) -> Path:
-    out_args = ", ".join([f"int32_t *out{i}" for i in range(len(outputs))])
-    copies = "\n".join(
-        [
-            f"        memcpy(out{i}, kbnn_context_get_output_i32(&ctx, {tensor_id}), sizeof(int32_t) * {count});"
-            for i, (tensor_id, count) in enumerate(zip(outputs, counts))
-        ]
-    )
-    wrapper = output_dir / f"{model_name}_wrapper.c"
-    wrapper.write_text(
-        textwrap.dedent(
-            f"""
-            #include <string.h>
-            #include "kerasbnn.h"
-            #include "{model_name}_export.h"
-
-            int run_model(const float *input, {out_args}) {{
-                static unsigned char arena[{arena_bytes}];
-                kbnn_context ctx;
-                int rc = kbnn_context_init(&ctx, &{model_name}, arena, sizeof(arena));
-                if (rc != 0) return rc;
-                kbnn_context_set_input_f32(&ctx, 0, input);
-                rc = kbnn_model_run(&ctx);
-                if (rc == 0) {{
-            {copies}
-                }}
-                kbnn_context_release(&ctx);
-                return rc;
-            }}
-            """
-        ).strip()
-        + "\n"
-    )
-    lib_path = output_dir / f"lib{model_name}.so"
-    cmd = [
-        "clang",
-        "-shared",
-        "-fPIC",
-        "-Ofast",
-        "-std=c11",
-        "-march=native",
-        "-Wall",
-        "-Wextra",
-        "-pedantic",
-        "-ffast-math",
-        "-fno-math-errno",
-        "-funroll-loops",
-        "-fomit-frame-pointer",
-        f"-I{REPO_ROOT}",
-        f"-I{REPO_ROOT / 'kerasbnn'}",
-        str(wrapper),
-        str(REPO_ROOT / "kerasbnn" / "kerasbnn.c"),
-        "-lm",
-        "-o",
-        str(lib_path),
-    ]
-    subprocess.run(cmd, check=True)
-    return lib_path
-
-
 def _run_exported_model(model, image: np.ndarray, model_name: str) -> list[np.ndarray]:
     with tempfile.TemporaryDirectory(prefix="kerasbnn_runtime_") as td:
         output_dir = Path(td)
-        export_model_to_c(model, output_dir, model_name=model_name)
-        meta = json.loads((output_dir / f"{model_name}_export.json").read_text())
+        _, meta = export_bundle_meta(model, output_dir, model_name=model_name, emit_example_main_c=False)
         outputs = [int(v) for v in meta["outputs"]]
         counts = [int(np.prod(meta["tensors"][tensor_id]["shape"])) for tensor_id in outputs]
-        lib_path = _compile_shared_export(output_dir, model_name, int(meta["arena_bytes"]), outputs, counts)
+        lib_path = compile_bundle_runner(
+            output_dir,
+            model_name,
+            int(meta["arena_bytes"]),
+            counts,
+            repo_root=REPO_ROOT,
+        )
         dll = ctypes.CDLL(str(lib_path))
         dll.run_model.argtypes = [ctypes.POINTER(ctypes.c_float)] + [ctypes.POINTER(ctypes.c_int32)] * len(outputs)
         dll.run_model.restype = ctypes.c_int

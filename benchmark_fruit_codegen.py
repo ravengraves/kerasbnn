@@ -17,12 +17,11 @@ os.environ.setdefault("JAX_DISABLE_JIT", "1")
 
 sys.path.insert(0, "/home/claude/source/yolovxnor")
 
-from kerasbnn.export_c import export_model_to_c
+from kerasbnn.generated_runtime import export_bundle_meta
 from kerasbnn.export_calibration import build_export_array_overrides
 from kerasbnn.eval_fruit_codegen_parity import (
     DEFAULT_RUN_DIR,
     _build_images,
-    _compile_shared_export,
     _load_anchors_csv,
     _manual_load_named_weights,
     _map50,
@@ -116,18 +115,17 @@ def _compile_bench_export(
     output_dir: Path,
     model_name: str,
     arena_bytes: int,
-    output_ids: list[int],
     counts: list[int],
     input_numel: int,
     cc: str,
     *,
     enable_profile: bool = False,
 ) -> Path:
-    out_args = ", ".join([f"int32_t *out{i}" for i in range(len(output_ids))])
+    out_args = ", ".join([f"int32_t *out{i}" for i in range(len(counts))])
     copies = "\n".join(
         [
-            f"        memcpy(out{i}, kbnn_context_get_output_i32(&ctx, {tensor_id}), sizeof(int32_t) * {count});"
-            for i, (tensor_id, count) in enumerate(zip(output_ids, counts))
+            f"        memcpy(out{i}, {model_name}_output_i32(&ctx, {i}), sizeof(int32_t) * {count});"
+            for i, count in enumerate(counts)
         ]
     )
     wrapper = output_dir / f"{model_name}_bench_wrapper.c"
@@ -142,6 +140,12 @@ def _compile_bench_export(
             #include "kerasbnn.h"
             #include "{model_name}_export.h"
 
+            int {model_name}_init(kbnn_context *ctx, void *arena, size_t arena_bytes);
+            size_t {model_name}_arena_bytes(void);
+            void {model_name}_set_input_f32(kbnn_context *ctx, int32_t input_index, const float *input);
+            const int32_t *{model_name}_output_i32(const kbnn_context *ctx, int32_t output_index);
+            int {model_name}_run(kbnn_context *ctx);
+
             static double kbnn_now_seconds(void) {{
                 struct timespec ts;
                 clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -151,10 +155,10 @@ def _compile_bench_export(
             int run_model(const float *input, {out_args}) {{
                 static unsigned char arena[{arena_bytes}] __attribute__((aligned(64)));
                 kbnn_context ctx;
-                int rc = kbnn_context_init(&ctx, &{model_name}, arena, sizeof(arena));
+                int rc = {model_name}_init(&ctx, arena, sizeof(arena));
                 if (rc != 0) return rc;
-                kbnn_context_set_input_f32(&ctx, 0, input);
-                rc = kbnn_model_run(&ctx);
+                {model_name}_set_input_f32(&ctx, 0, input);
+                rc = {model_name}_run(&ctx);
                 if (rc == 0) {{
             {copies}
                 }}
@@ -165,18 +169,18 @@ def _compile_bench_export(
             double bench_single_image(const float *input, int iterations, int32_t *checksum) {{
                 static unsigned char arena[{arena_bytes}] __attribute__((aligned(64)));
                 kbnn_context ctx;
-                int rc = kbnn_context_init(&ctx, &{model_name}, arena, sizeof(arena));
+                int rc = {model_name}_init(&ctx, arena, sizeof(arena));
                 if (rc != 0) return -1.0;
                 double start = kbnn_now_seconds();
                 int32_t sum = 0;
                 for (int i = 0; i < iterations; ++i) {{
-                    kbnn_context_set_input_f32(&ctx, 0, input);
-                    rc = kbnn_model_run(&ctx);
+                    {model_name}_set_input_f32(&ctx, 0, input);
+                    rc = {model_name}_run(&ctx);
                     if (rc != 0) {{
                         kbnn_context_release(&ctx);
                         return -2.0;
                     }}
-                    const int32_t *out0 = kbnn_context_get_output_i32(&ctx, {output_ids[0]});
+                    const int32_t *out0 = {model_name}_output_i32(&ctx, 0);
                     sum += out0[0];
                 }}
                 double end = kbnn_now_seconds();
@@ -188,20 +192,20 @@ def _compile_bench_export(
             double bench_image_set(const float *inputs, int image_count, int iterations, int32_t *checksum) {{
                 static unsigned char arena[{arena_bytes}] __attribute__((aligned(64)));
                 kbnn_context ctx;
-                int rc = kbnn_context_init(&ctx, &{model_name}, arena, sizeof(arena));
+                int rc = {model_name}_init(&ctx, arena, sizeof(arena));
                 if (rc != 0) return -1.0;
                 double start = kbnn_now_seconds();
                 int32_t sum = 0;
                 for (int it = 0; it < iterations; ++it) {{
                     for (int img = 0; img < image_count; ++img) {{
                         const float *input = inputs + (size_t)img * (size_t){input_numel};
-                        kbnn_context_set_input_f32(&ctx, 0, input);
-                        rc = kbnn_model_run(&ctx);
+                        {model_name}_set_input_f32(&ctx, 0, input);
+                        rc = {model_name}_run(&ctx);
                         if (rc != 0) {{
                             kbnn_context_release(&ctx);
                             return -2.0;
                         }}
-                        const int32_t *out0 = kbnn_context_get_output_i32(&ctx, {output_ids[0]});
+                        const int32_t *out0 = {model_name}_output_i32(&ctx, 0);
                         sum += out0[0];
                     }}
                 }}
@@ -233,6 +237,7 @@ def _compile_bench_export(
         f"-I{REPO_ROOT}",
         f"-I{REPO_ROOT / 'kerasbnn'}",
         str(wrapper),
+        str(output_dir / f"{model_name}_runtime.c"),
         str(REPO_ROOT / "kerasbnn" / "kerasbnn.c"),
         "-lm",
         "-o",
@@ -263,6 +268,7 @@ class KbnnProfile(ctypes.Structure):
         ("quant_act_ns", ctypes.c_uint64),
         ("qdense_ns", ctypes.c_uint64),
         ("qact_qdense_ns", ctypes.c_uint64),
+        ("add_ns", ctypes.c_uint64),
     ]
 
 
@@ -308,22 +314,20 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="kerasbnn_fruit_bench_") as td:
         export_dir = Path(td)
-        outputs = export_model_to_c(
+        _, meta = export_bundle_meta(
             model,
             export_dir,
             model_name="fruit_bench_model",
             array_overrides=array_overrides,
         )
-        meta = json.loads(outputs["json"].read_text())
         output_ids = [int(v) for v in meta["outputs"]]
         counts = [int(np.prod(meta["tensors"][tensor_id]["shape"])) for tensor_id in output_ids]
-        input_numel = int(np.prod(meta["tensors"][0]["shape"]))
+        input_numel = int(np.prod(meta["tensors"][int(meta["inputs"][0])]["shape"]))
 
         lib_path = _compile_bench_export(
             export_dir,
             "fruit_bench_model",
             int(meta["arena_bytes"]),
-            output_ids,
             counts,
             input_numel,
             args.cc,
@@ -332,7 +336,6 @@ def main():
             export_dir,
             "fruit_bench_model",
             int(meta["arena_bytes"]),
-            output_ids,
             counts,
             input_numel,
             args.cc,
@@ -392,21 +395,27 @@ def main():
                 #include "kerasbnn.h"
                 #include "fruit_bench_model_export.h"
 
+                int fruit_bench_model_init(kbnn_context *ctx, void *arena, size_t arena_bytes);
+                size_t fruit_bench_model_arena_bytes(void);
+                void fruit_bench_model_set_input_f32(kbnn_context *ctx, int32_t input_index, const float *input);
+                const int32_t *fruit_bench_model_output_i32(const kbnn_context *ctx, int32_t output_index);
+                int fruit_bench_model_run(kbnn_context *ctx);
+
                 int bench_profile_single_image(const float *input, int iterations, kbnn_profile *profile_out, int32_t *checksum) {{
                     static unsigned char arena[{int(meta["arena_bytes"])}] __attribute__((aligned(64)));
                     kbnn_context ctx;
-                    int rc = kbnn_context_init(&ctx, &fruit_bench_model, arena, sizeof(arena));
+                    int rc = fruit_bench_model_init(&ctx, arena, sizeof(arena));
                     if (rc != 0) return rc;
                     kbnn_context_reset_profile(&ctx);
                     int32_t sum = 0;
                     for (int i = 0; i < iterations; ++i) {{
-                        kbnn_context_set_input_f32(&ctx, 0, input);
-                        rc = kbnn_model_run(&ctx);
+                        fruit_bench_model_set_input_f32(&ctx, 0, input);
+                        rc = fruit_bench_model_run(&ctx);
                         if (rc != 0) {{
                             kbnn_context_release(&ctx);
                             return rc;
                         }}
-                        sum += kbnn_context_get_output_i32(&ctx, {output_ids[0]})[0];
+                        sum += fruit_bench_model_output_i32(&ctx, 0)[0];
                     }}
                     if (profile_out != NULL) {{
                         *profile_out = *kbnn_context_get_profile(&ctx);
@@ -441,6 +450,7 @@ def main():
                 f"-I{REPO_ROOT}",
                 f"-I{REPO_ROOT / 'kerasbnn'}",
                 str(profile_wrapper),
+                str(export_dir / "fruit_bench_model_runtime.c"),
                 str(REPO_ROOT / "kerasbnn" / "kerasbnn.c"),
                 "-lm",
                 "-o",

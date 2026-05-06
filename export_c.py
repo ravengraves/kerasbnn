@@ -1,3 +1,35 @@
+"""Generic C11 export for supported `kerasbnn` / Keras binary models.
+
+The active lowering path supports:
+- `InputLayer`
+- `Activation` / `Reshape` / `Flatten` pass-through aliases
+- `ThermometerBinaryInput`
+- `QuantizedInput`
+- `QuantizedActivation`
+- `QuantizedConv2D`
+- `QuantizedDense`
+- fused `QuantizedActivation -> QuantizedDense`
+- `XNORBinaryConv2D`
+- `XNORBinaryDense`
+- `BinaryAffineNorm`
+- `SpaceToDepth`
+- `Concatenate`
+- `UpSampling2D`
+- `Add`
+
+The exporter writes packed/quantized weight headers in hex/integer form plus
+JSON metadata. `export_model_bundle()` can also emit generic C11 wrapper/example
+sources so the generated model can be compiled against `kerasbnn.c`.
+
+Typical Python usage:
+
+```python
+from kerasbnn.export_c import export_model_bundle
+
+artifacts = export_model_bundle(model, "out_dir", model_name="my_bnn")
+```
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -62,6 +94,10 @@ def _quantize_signed_int_grid(x: np.ndarray, levels: int) -> np.ndarray:
 
 def _to_fx(x: np.ndarray | float) -> np.ndarray:
     return np.rint(np.asarray(x, dtype=np.float64) * FX_ONE).astype(np.int32)
+
+
+def _element_count(shape: tuple[int, ...]) -> int:
+    return int(np.prod(shape, dtype=np.int64)) if shape else 1
 
 
 def _pack_binary_kernel(kernel_sign: np.ndarray) -> np.ndarray:
@@ -277,7 +313,18 @@ def lower_model(model, model_name: str = "kerasbnn_model", array_overrides: dict
         else:
             input_ids = [builder.tensor_by_layer[_source_layer_name(t)] for t in input_tensors]
 
-        if class_name in {"Activation", "Reshape"}:
+        if class_name in {"Activation", "Reshape", "Flatten"}:
+            if class_name == "Activation":
+                act_name = getattr(getattr(layer, "activation", None), "__name__", "")
+                if act_name not in {"linear", ""}:
+                    raise NotImplementedError(f"Only linear Activation aliases are supported. Layer: {layer.name}")
+            if class_name in {"Reshape", "Flatten"}:
+                input_shape = builder.tensors[input_ids[0]].shape
+                if _element_count(input_shape) != _element_count(output_shape):
+                    raise NotImplementedError(
+                        f"{class_name} export requires equal element count. "
+                        f"Layer: {layer.name} input={input_shape} output={output_shape}"
+                    )
             tensor_id = builder.add_tensor(layer.name, _tensor_kind_for_alias(builder, input_ids[0]), output_shape, alias_of=input_ids[0])
             builder.tensor_by_layer[layer.name] = tensor_id
             continue
@@ -574,6 +621,33 @@ def lower_model(model, model_name: str = "kerasbnn_model", array_overrides: dict
             )
             continue
 
+        if class_name == "Add":
+            if len(input_ids) < 2:
+                raise NotImplementedError(f"Add export requires at least two inputs. Layer: {layer.name}")
+            input_meta = [builder.tensors[idx] for idx in input_ids]
+            base_shape = tuple(input_meta[0].shape)
+            if any(tuple(t.shape) != base_shape for t in input_meta[1:]) or tuple(output_shape) != base_shape:
+                raise NotImplementedError(f"Add export requires identical input/output shapes. Layer: {layer.name}")
+            if any(t.kind != "KBNN_TENSOR_I32" for t in input_meta):
+                raise NotImplementedError(f"Add export only supports int32 tensors. Layer: {layer.name}")
+            tensor_id = builder.add_tensor(layer.name, "KBNN_TENSOR_I32", output_shape)
+            builder.tensor_by_layer[layer.name] = tensor_id
+            ids_name = builder.add_array(f"{model_name}_{layer.name}_input_ids", "int32_t", np.asarray(input_ids, dtype=np.int32))
+            builder.add_op(
+                "KBNN_OP_ADD",
+                layer.name,
+                "kbnn_add_params",
+                [
+                    f".output_id = {tensor_id}",
+                    f".input_count = {len(input_ids)}",
+                    f".input_ids = {ids_name}",
+                    f".rank = {len(output_shape)}",
+                    f".shape = {_emit_shape(output_shape)}",
+                ],
+                json_payload={"inputs": input_ids, "output": tensor_id, "shape": output_shape},
+            )
+            continue
+
         if class_name == "UpSampling2D":
             tensor_id = builder.add_tensor(layer.name, "KBNN_TENSOR_I32", output_shape)
             builder.tensor_by_layer[layer.name] = tensor_id
@@ -809,13 +883,11 @@ def _render_header(builder: ExportBuilder) -> str:
 def model_outputs(builder: ExportBuilder) -> list[int]:
     if builder.output_tensor_ids:
         return list(builder.output_tensor_ids)
-    wanted = []
-    for name in ("pred_13", "pred_26"):
-        if name in builder.tensor_by_layer:
-            wanted.append(builder.tensor_by_layer[name])
-    if wanted:
-        return wanted
     return [len(builder.tensors) - 1]
+
+
+def model_inputs(builder: ExportBuilder) -> list[int]:
+    return [idx for idx, tensor in enumerate(builder.tensors) if tensor.kind == "KBNN_TENSOR_EXTERNAL_F32"]
 
 
 def _render_json(builder: ExportBuilder) -> dict[str, Any]:
@@ -842,8 +914,120 @@ def _render_json(builder: ExportBuilder) -> dict[str, Any]:
             }
             for op in builder.ops
         ],
+        "inputs": model_inputs(builder),
         "outputs": model_outputs(builder),
     }
+
+
+def _render_runtime_source(builder: ExportBuilder) -> str:
+    input_ids = model_inputs(builder)
+    output_ids = model_outputs(builder)
+    return "\n".join(
+        [
+            '#include "kerasbnn.h"',
+            f'#include "{builder.model_name}_export.h"',
+            "",
+            f"static const int32_t {builder.model_name}_input_ids[] = "
+            + "{"
+            + ", ".join(str(v) for v in input_ids)
+            + "};",
+            "",
+            f"int32_t {builder.model_name}_input_count(void) {{ return {len(input_ids)}; }}",
+            f"int32_t {builder.model_name}_output_count(void) {{ return {len(output_ids)}; }}",
+            f"size_t {builder.model_name}_arena_bytes(void) {{ return {builder.arena_offset}; }}",
+            "",
+            f"int {builder.model_name}_init(kbnn_context *ctx, void *arena, size_t arena_bytes) {{",
+            f"    return kbnn_context_init(ctx, &{builder.model_name}, arena, arena_bytes);",
+            "}",
+            "",
+            f"int32_t {builder.model_name}_input_tensor_id(int32_t index) {{",
+            f"    if (index < 0 || index >= {len(input_ids)}) return -1;",
+            f"    return {builder.model_name}_input_ids[index];",
+            "}",
+            "",
+            f"int32_t {builder.model_name}_output_tensor_id(int32_t index) {{",
+            f"    if (index < 0 || index >= {len(output_ids)}) return -1;",
+            f"    return {builder.model_name}.output_ids[index];",
+            "}",
+            "",
+            f"void {builder.model_name}_set_input_f32(kbnn_context *ctx, int32_t input_index, const float *input) {{",
+            f"    if (input_index < 0 || input_index >= {len(input_ids)}) return;",
+            f"    kbnn_context_set_input_f32(ctx, {builder.model_name}_input_ids[input_index], input);",
+            "}",
+            "",
+            f"const int32_t *{builder.model_name}_output_i32(const kbnn_context *ctx, int32_t output_index) {{",
+            f"    if (output_index < 0 || output_index >= {len(output_ids)}) return (const int32_t *)0;",
+            f"    return kbnn_context_get_output_i32(ctx, {builder.model_name}.output_ids[output_index]);",
+            "}",
+            "",
+            f"int {builder.model_name}_run(kbnn_context *ctx) {{",
+            "    return kbnn_model_run(ctx);",
+            "}",
+            "",
+        ]
+    )
+
+
+def _render_example_main(builder: ExportBuilder) -> str:
+    input_ids = model_inputs(builder)
+    input_tensors = [builder.tensors[idx] for idx in input_ids]
+    lines = [
+        "#include <stdint.h>",
+        "#include <stdio.h>",
+        "#include <stdlib.h>",
+        '#include "kerasbnn.h"',
+        f'#include "{builder.model_name}_export.h"',
+        "",
+        f"int {builder.model_name}_init(kbnn_context *ctx, void *arena, size_t arena_bytes);",
+        f"int32_t {builder.model_name}_output_count(void);",
+        f"size_t {builder.model_name}_arena_bytes(void);",
+        f"void {builder.model_name}_set_input_f32(kbnn_context *ctx, int32_t input_index, const float *input);",
+        f"const int32_t *{builder.model_name}_output_i32(const kbnn_context *ctx, int32_t output_index);",
+        f"int32_t {builder.model_name}_output_tensor_id(int32_t index);",
+        f"int {builder.model_name}_run(kbnn_context *ctx);",
+        "",
+        "int main(void) {",
+        f"    uint8_t *arena = (uint8_t *)calloc(1, {builder.model_name}_arena_bytes());",
+        "    if (!arena) return 1;",
+        "    kbnn_context ctx;",
+        f"    if ({builder.model_name}_init(&ctx, arena, {builder.model_name}_arena_bytes()) != 0) {{",
+        "        free(arena);",
+        "        return 1;",
+        "    }",
+    ]
+    for idx, tensor in enumerate(input_tensors):
+        elems = _element_count(tensor.shape)
+        lines.extend(
+            [
+                f"    float *input_{idx} = (float *)calloc({elems}, sizeof(float));",
+                f"    if (!input_{idx}) {{ kbnn_context_release(&ctx); free(arena); return 1; }}",
+                f"    {builder.model_name}_set_input_f32(&ctx, {idx}, input_{idx});",
+            ]
+        )
+    lines.extend(
+        [
+            f"    if ({builder.model_name}_run(&ctx) != 0) {{",
+            "        kbnn_context_release(&ctx);",
+        ]
+    )
+    for idx, _ in enumerate(input_tensors):
+        lines.append(f"        free(input_{idx});")
+    lines.extend(
+        [
+            "        free(arena);",
+            "        return 1;",
+            "    }",
+            f"    for (int32_t i = 0; i < {builder.model_name}_output_count(); ++i) {{",
+            f"        const int32_t *out = {builder.model_name}_output_i32(&ctx, i);",
+            f'        printf(\"output[%d] tensor_id=%d first_q12=%d\\n\", (int)i, (int){builder.model_name}_output_tensor_id(i), out ? (int)out[0] : 0);',
+            "    }",
+            "    kbnn_context_release(&ctx);",
+        ]
+    )
+    for idx, _ in enumerate(input_tensors):
+        lines.append(f"    free(input_{idx});")
+    lines.extend(["    free(arena);", "    return 0;", "}", ""])
+    return "\n".join(lines)
 
 
 def export_model_to_c(
@@ -852,6 +1036,7 @@ def export_model_to_c(
     model_name: str = "kerasbnn_model",
     array_overrides: dict[str, np.ndarray] | None = None,
 ) -> dict[str, Path]:
+    """Write the core export artifacts for a supported Keras BNN model."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     builder = lower_model(model, model_name=model_name, array_overrides=array_overrides)
@@ -860,3 +1045,32 @@ def export_model_to_c(
     header_path.write_text(_render_header(builder) + "\n")
     json_path.write_text(json.dumps(_render_json(builder), indent=2, sort_keys=True) + "\n")
     return {"header": header_path, "json": json_path}
+
+
+def export_model_bundle(
+    model,
+    output_dir: str | Path,
+    model_name: str = "kerasbnn_model",
+    array_overrides: dict[str, np.ndarray] | None = None,
+    *,
+    emit_runtime_c: bool = True,
+    emit_example_main_c: bool = True,
+) -> dict[str, Path]:
+    """Write a complete C11-ready export bundle for a supported Keras BNN model."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    builder = lower_model(model, model_name=model_name, array_overrides=array_overrides)
+    header_path = output_dir / f"{model_name}_export.h"
+    json_path = output_dir / f"{model_name}_export.json"
+    header_path.write_text(_render_header(builder) + "\n")
+    json_path.write_text(json.dumps(_render_json(builder), indent=2, sort_keys=True) + "\n")
+    artifacts = {"header": header_path, "json": json_path}
+    if emit_runtime_c:
+        runtime_path = output_dir / f"{model_name}_runtime.c"
+        runtime_path.write_text(_render_runtime_source(builder))
+        artifacts["runtime_c"] = runtime_path
+    if emit_example_main_c:
+        example_path = output_dir / f"{model_name}_example_main.c"
+        example_path.write_text(_render_example_main(builder))
+        artifacts["example_main_c"] = example_path
+    return artifacts

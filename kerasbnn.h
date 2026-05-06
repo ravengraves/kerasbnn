@@ -33,6 +33,7 @@ typedef enum {
     KBNN_OP_QUANT_ACT = 9,
     KBNN_OP_QDENSE = 10,
     KBNN_OP_QACT_QDENSE = 11,
+    KBNN_OP_ADD = 12,
 } kbnn_op_kind;
 
 typedef struct {
@@ -157,6 +158,14 @@ typedef struct {
 } kbnn_concat_params;
 
 typedef struct {
+    int32_t output_id;
+    int32_t input_count;
+    const int32_t *input_ids;
+    int32_t rank;
+    int32_t shape[KBNN_MAX_RANK];
+} kbnn_add_params;
+
+typedef struct {
     int32_t input_id;
     int32_t output_id;
     int32_t in_h;
@@ -249,6 +258,7 @@ typedef struct {
     uint64_t quant_act_ns;
     uint64_t qdense_ns;
     uint64_t qact_qdense_ns;
+    uint64_t add_ns;
 } kbnn_profile;
 
 typedef struct {
