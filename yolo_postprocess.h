@@ -67,6 +67,8 @@ typedef struct {
     float nms_iou_threshold;
     int32_t max_detections;
     int32_t per_class_nms;
+    uint64_t class_filter_mask;
+    int32_t use_class_filter;
     kbnn_yolo_class_mode class_mode;
     kbnn_yolo_box_mode box_mode;
 } kbnn_yolo_postprocess_params;

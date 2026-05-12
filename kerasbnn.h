@@ -275,6 +275,8 @@ typedef struct {
     float w;
     float h;
     float score;
+    float objectness;
+    float class_score;
     int32_t class_id;
 } kbnn_detection;
 
@@ -286,6 +288,22 @@ void *kbnn_context_tensor_ptr(const kbnn_context *ctx, int32_t tensor_id);
 void kbnn_context_reset_profile(kbnn_context *ctx);
 const kbnn_profile *kbnn_context_get_profile(const kbnn_context *ctx);
 int kbnn_model_run(kbnn_context *ctx);
+int kbnn_model_run_from(kbnn_context *ctx, int32_t op_start);
+
+void kbnn_pack_thermo_input_u8(
+    const kbnn_thermo_input_params *p,
+    const uint8_t *input,
+    int32_t input_stride_bytes,
+    uint64_t *output
+);
+void kbnn_pack_thermo_input_u8_resize(
+    const kbnn_thermo_input_params *p,
+    const uint8_t *input,
+    int32_t src_w,
+    int32_t src_h,
+    int32_t src_stride_bytes,
+    uint64_t *output
+);
 
 int32_t kbnn_xnor_dot_u64(const uint64_t *a, const uint64_t *b, int32_t words, uint64_t last_mask);
 int kbnn_nms(const kbnn_detection *detections, int32_t count, float iou_threshold, int32_t top_k, int32_t *keep_indices);

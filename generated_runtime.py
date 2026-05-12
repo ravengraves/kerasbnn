@@ -27,14 +27,12 @@ def export_bundle_meta(
     output_dir: Path,
     model_name: str,
     *,
-    array_overrides: dict[str, np.ndarray] | None = None,
     emit_example_main_c: bool = False,
 ) -> tuple[dict[str, Path], dict]:
     artifacts = export_model_bundle(
         model,
         output_dir,
         model_name=model_name,
-        array_overrides=array_overrides,
         emit_example_main_c=emit_example_main_c,
     )
     meta = json.loads(artifacts["json"].read_text())
@@ -122,14 +120,12 @@ def predict_bundle_outputs(
     model_name: str,
     *,
     repo_root: Path,
-    array_overrides: dict[str, np.ndarray] | None = None,
     cc: str = "clang",
 ) -> tuple[dict[str, np.ndarray], dict]:
     _, meta = export_bundle_meta(
         model,
         output_dir,
         model_name=model_name,
-        array_overrides=array_overrides,
         emit_example_main_c=False,
     )
     output_ids = [int(v) for v in meta["outputs"]]

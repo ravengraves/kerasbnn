@@ -18,7 +18,6 @@ os.environ.setdefault("JAX_DISABLE_JIT", "1")
 sys.path.insert(0, "/home/claude/source/yolovxnor")
 
 from kerasbnn.generated_runtime import export_bundle_meta
-from kerasbnn.export_calibration import build_export_array_overrides
 from kerasbnn.eval_fruit_codegen_parity import (
     DEFAULT_RUN_DIR,
     _build_images,
@@ -91,9 +90,6 @@ def parse_args():
     ap.add_argument("--val-iterations", type=int, default=50)
     ap.add_argument("--batch-size", type=int, default=8)
     ap.add_argument("--cc", default="clang")
-    ap.add_argument("--calibrate-export", default="auto", choices=("auto", "none", "perlin_compare"))
-    ap.add_argument("--calibrate-images", type=int, default=4)
-    ap.add_argument("--calibrate-seed", type=int, default=43)
     return ap.parse_args()
 
 
@@ -302,23 +298,12 @@ def main():
 
     keras_preds = _predict_named(model, val_images, args.batch_size, training=False)
     keras_map50 = _map50(val_samples, keras_preds, anchors, args, len(classes))
-    array_overrides, calibration_meta = build_export_array_overrides(
-        model,
-        model_name="fruit_bench_model",
-        mode=args.calibrate_export,
-        dataset=args.dataset,
-        checkpoint=str(weights_path),
-        calib_images=args.calibrate_images,
-        seed=args.calibrate_seed,
-    )
-
     with tempfile.TemporaryDirectory(prefix="kerasbnn_fruit_bench_") as td:
         export_dir = Path(td)
         _, meta = export_bundle_meta(
             model,
             export_dir,
             model_name="fruit_bench_model",
-            array_overrides=array_overrides,
         )
         output_ids = [int(v) for v in meta["outputs"]]
         counts = [int(np.prod(meta["tensors"][tensor_id]["shape"])) for tensor_id in output_ids]
@@ -347,7 +332,6 @@ def main():
             val_images,
             export_dir,
             "fruit_bench_model",
-            array_overrides=array_overrides,
         )
         c_map50 = _map50(val_samples, c_preds, anchors, args, len(classes))
 
@@ -526,8 +510,6 @@ def main():
                 "run_dir": str(run_dir),
                 "weights": str(weights_path),
                 "compiler": args.cc,
-                "calibration": calibration_meta,
-                "override_count": len(array_overrides),
                 "val_samples": len(val_images),
                 "keras_map50": float(keras_map50),
                 "c_map50": float(c_map50),

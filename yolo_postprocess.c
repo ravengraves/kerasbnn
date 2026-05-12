@@ -49,6 +49,19 @@ static float kbnn_yolo_raw_class_logit(
     return raw / params->logit_scale;
 }
 
+static int kbnn_yolo_class_allowed(
+    const kbnn_yolo_postprocess_params *params,
+    int32_t class_id
+) {
+    if (params == NULL || !params->use_class_filter) {
+        return 1;
+    }
+    if (class_id < 0 || class_id >= 64) {
+        return 0;
+    }
+    return (params->class_filter_mask & (1ull << (uint32_t) class_id)) != 0ull;
+}
+
 static int kbnn_yolo_cmp_score_desc(const void *lhs, const void *rhs) {
     const kbnn_detection *a = (const kbnn_detection *) lhs;
     const kbnn_detection *b = (const kbnn_detection *) rhs;
@@ -151,33 +164,52 @@ int32_t kbnn_yolo_decode_heads(
                         obj = kbnn_yolo_objectness_linear(raw_obj, params->obj_output_scale, params->logit_scale);
                     }
                     if (params->num_classes <= 0) {
+                        if (!kbnn_yolo_class_allowed(params, 0)) {
+                            continue;
+                        }
                         cls = 0;
                         cls_score = 1.0f;
                     } else if (params->class_mode == KBNN_YOLO_CLASS_SOFTMAX) {
                         float denom = 0.0f;
+                        float max_logit = 0.0f;
+                        int have_logit = 0;
+                        int have_allowed = 0;
                         for (cls = 0; cls < params->num_classes; ++cls) {
                             const float raw_cls = (float) head->pred_q12[base + 5u + (size_t) cls] / (float) KBNN_FX_ONE;
                             const float logit = kbnn_yolo_raw_class_logit(raw_cls, params);
-                            if (cls == 0 || logit > best_logit) {
+                            if (!have_logit || logit > max_logit) {
+                                max_logit = logit;
+                                have_logit = 1;
+                            }
+                            if (kbnn_yolo_class_allowed(params, cls) && (!have_allowed || logit > best_logit)) {
                                 best_logit = logit;
                                 best_id = cls;
+                                have_allowed = 1;
                             }
+                        }
+                        if (!have_allowed) {
+                            continue;
                         }
                         for (cls = 0; cls < params->num_classes; ++cls) {
                             const float raw_cls = (float) head->pred_q12[base + 5u + (size_t) cls] / (float) KBNN_FX_ONE;
-                            denom += expf(kbnn_yolo_raw_class_logit(raw_cls, params) - best_logit);
+                            denom += expf(kbnn_yolo_raw_class_logit(raw_cls, params) - max_logit);
                         }
                         cls = best_id;
-                        cls_score = 1.0f / ((denom > 1e-6f) ? denom : 1.0f);
+                        cls_score = expf(best_logit - max_logit) / ((denom > 1e-6f) ? denom : 1.0f);
                     } else {
                         float best_prob = 0.0f;
+                        int have_allowed = 0;
                         for (cls = 0; cls < params->num_classes; ++cls) {
                             const float raw_cls = (float) head->pred_q12[base + 5u + (size_t) cls] / (float) KBNN_FX_ONE;
                             const float prob = kbnn_yolo_sigmoid(kbnn_yolo_raw_class_logit(raw_cls, params));
-                            if (cls == 0 || prob > best_prob) {
+                            if (kbnn_yolo_class_allowed(params, cls) && (!have_allowed || prob > best_prob)) {
                                 best_prob = prob;
                                 best_id = cls;
+                                have_allowed = 1;
                             }
+                        }
+                        if (!have_allowed) {
+                            continue;
                         }
                         cls = best_id;
                         cls_score = best_prob;
@@ -194,6 +226,8 @@ int32_t kbnn_yolo_decode_heads(
                     detections[out_count].w = bw;
                     detections[out_count].h = bh;
                     detections[out_count].score = score;
+                    detections[out_count].objectness = obj;
+                    detections[out_count].class_score = cls_score;
                     detections[out_count].class_id = cls;
                     ++out_count;
                 }

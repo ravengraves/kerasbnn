@@ -168,6 +168,16 @@ static inline float kbnn_thermo_normalize_f32(float input, float min_value, floa
     return x;
 }
 
+static inline int32_t kbnn_thermo_active_from_u8(uint8_t raw, int32_t levels) {
+    int32_t active = ((int32_t)raw * (levels + 1)) / 255;
+    if (active < 0) {
+        active = 0;
+    } else if (active > levels) {
+        active = levels;
+    }
+    return active;
+}
+
 #if defined(__clang__) || defined(__GNUC__)
 #define KBNN_ASSUME_ALIGNED(ptr, align) __builtin_assume_aligned((ptr), (align))
 #else
@@ -351,6 +361,162 @@ static void kbnn_exec_thermo_input(const kbnn_context *ctx, const kbnn_thermo_in
 #ifdef KBNN_ENABLE_PROFILE
     ((kbnn_context *)ctx)->profile.thermo_input_ns += kbnn_now_ns() - t0;
 #endif
+}
+
+void kbnn_pack_thermo_input_u8(
+    const kbnn_thermo_input_params *p,
+    const uint8_t *input,
+    int32_t input_stride_bytes,
+    uint64_t *output
+) {
+    const size_t spatial = (size_t)p->height * (size_t)p->width;
+    const int32_t out_channels = p->channels * p->levels;
+    const size_t words_per_point = kbnn_packed_words_for_point(out_channels);
+    const float inv_range = 1.0f / (p->max_value - p->min_value);
+    int32_t y;
+    if (p == NULL || input == NULL || output == NULL) {
+        return;
+    }
+    if (input_stride_bytes <= 0) {
+        input_stride_bytes = p->width * p->channels;
+    }
+#ifndef KBNN_DISABLE_FAST_THERMO
+    if (words_per_point == 1 && p->levels > 0 && p->levels < 64) {
+        const uint64_t ones_mask = (p->levels == 64) ? UINT64_MAX : ((1ull << p->levels) - 1ull);
+        const int direct_u8 = (p->min_value == 0.0f && p->max_value == 1.0f);
+        for (y = 0; y < p->height; ++y) {
+            const uint8_t *row = input + (size_t)y * (size_t)input_stride_bytes;
+            for (int32_t x = 0; x < p->width; ++x) {
+                uint64_t packed = 0ull;
+                const uint8_t *pixel = row + (size_t)x * (size_t)p->channels;
+                for (int32_t c = 0; c < p->channels; ++c) {
+                    int32_t active;
+                    if (direct_u8) {
+                        active = kbnn_thermo_active_from_u8(pixel[c], p->levels);
+                    } else {
+                        const float raw = (float)pixel[c] * (1.0f / 255.0f);
+                        const float v = kbnn_thermo_normalize_f32(raw, p->min_value, inv_range);
+                        active = (int32_t)floorf(v * (float)(p->levels + 1) + 1e-6f);
+                        if (active < 0) {
+                            active = 0;
+                        } else if (active > p->levels) {
+                            active = p->levels;
+                        }
+                    }
+                    if (active > 0) {
+                        const uint64_t mask = (active >= 64) ? UINT64_MAX : ((1ull << active) - 1ull);
+                        packed |= (mask & ones_mask) << (c * p->levels);
+                    }
+                }
+                output[(size_t)y * (size_t)p->width + (size_t)x] = packed;
+            }
+        }
+        return;
+    }
+#endif
+    memset(output, 0, spatial * words_per_point * sizeof(uint64_t));
+    for (y = 0; y < p->height; ++y) {
+        const uint8_t *row = input + (size_t)y * (size_t)input_stride_bytes;
+        for (int32_t x = 0; x < p->width; ++x) {
+            const size_t base = ((size_t)y * (size_t)p->width + (size_t)x) * words_per_point;
+            const uint8_t *pixel = row + (size_t)x * (size_t)p->channels;
+            for (int32_t c = 0; c < p->channels; ++c) {
+                const float raw = (float)pixel[c] * (1.0f / 255.0f);
+                const float v = kbnn_thermo_normalize_f32(raw, p->min_value, inv_range);
+                for (int32_t level = 0; level < p->levels; ++level) {
+                    const float threshold = (float)(level + 1) / (float)(p->levels + 1);
+                    const int bit = (v >= threshold);
+                    const int32_t out_c = c * p->levels + level;
+                    const size_t word_idx = base + (size_t)(out_c / 64);
+                    const int32_t bit_idx = out_c & 63;
+                    if (bit) {
+                        output[word_idx] |= (1ull << bit_idx);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void kbnn_pack_thermo_input_u8_resize(
+    const kbnn_thermo_input_params *p,
+    const uint8_t *input,
+    int32_t src_w,
+    int32_t src_h,
+    int32_t src_stride_bytes,
+    uint64_t *output
+) {
+    const size_t spatial = (size_t)p->height * (size_t)p->width;
+    const int32_t out_channels = p->channels * p->levels;
+    const size_t words_per_point = kbnn_packed_words_for_point(out_channels);
+    const float inv_range = 1.0f / (p->max_value - p->min_value);
+    int32_t y;
+    if (p == NULL || input == NULL || output == NULL || src_w <= 0 || src_h <= 0) {
+        return;
+    }
+    if (src_stride_bytes <= 0) {
+        src_stride_bytes = src_w * p->channels;
+    }
+#ifndef KBNN_DISABLE_FAST_THERMO
+    if (words_per_point == 1 && p->levels > 0 && p->levels < 64) {
+        const uint64_t ones_mask = (p->levels == 64) ? UINT64_MAX : ((1ull << p->levels) - 1ull);
+        const int direct_u8 = (p->min_value == 0.0f && p->max_value == 1.0f);
+        for (y = 0; y < p->height; ++y) {
+            const int32_t sy = (y * src_h) / p->height;
+            const uint8_t *row = input + (size_t)sy * (size_t)src_stride_bytes;
+            for (int32_t x = 0; x < p->width; ++x) {
+                uint64_t packed = 0ull;
+                const int32_t sx = (x * src_w) / p->width;
+                const uint8_t *pixel = row + (size_t)sx * (size_t)p->channels;
+                for (int32_t c = 0; c < p->channels; ++c) {
+                    int32_t active;
+                    if (direct_u8) {
+                        active = kbnn_thermo_active_from_u8(pixel[c], p->levels);
+                    } else {
+                        const float raw = (float)pixel[c] * (1.0f / 255.0f);
+                        const float v = kbnn_thermo_normalize_f32(raw, p->min_value, inv_range);
+                        active = (int32_t)floorf(v * (float)(p->levels + 1) + 1e-6f);
+                        if (active < 0) {
+                            active = 0;
+                        } else if (active > p->levels) {
+                            active = p->levels;
+                        }
+                    }
+                    if (active > 0) {
+                        const uint64_t mask = (active >= 64) ? UINT64_MAX : ((1ull << active) - 1ull);
+                        packed |= (mask & ones_mask) << (c * p->levels);
+                    }
+                }
+                output[(size_t)y * (size_t)p->width + (size_t)x] = packed;
+            }
+        }
+        return;
+    }
+#endif
+    memset(output, 0, spatial * words_per_point * sizeof(uint64_t));
+    for (y = 0; y < p->height; ++y) {
+        const int32_t sy = (y * src_h) / p->height;
+        const uint8_t *row = input + (size_t)sy * (size_t)src_stride_bytes;
+        for (int32_t x = 0; x < p->width; ++x) {
+            const int32_t sx = (x * src_w) / p->width;
+            const uint8_t *pixel = row + (size_t)sx * (size_t)p->channels;
+            const size_t base = ((size_t)y * (size_t)p->width + (size_t)x) * words_per_point;
+            for (int32_t c = 0; c < p->channels; ++c) {
+                const float raw = (float)pixel[c] * (1.0f / 255.0f);
+                const float v = kbnn_thermo_normalize_f32(raw, p->min_value, inv_range);
+                for (int32_t level = 0; level < p->levels; ++level) {
+                    const float threshold = (float)(level + 1) / (float)(p->levels + 1);
+                    const int bit = (v >= threshold);
+                    const int32_t out_c = c * p->levels + level;
+                    const size_t word_idx = base + (size_t)(out_c / 64);
+                    const int32_t bit_idx = out_c & 63;
+                    if (bit) {
+                        output[word_idx] |= (1ull << bit_idx);
+                    }
+                }
+            }
+        }
+    }
 }
 
 static void kbnn_exec_quantized_input(const kbnn_context *ctx, const kbnn_quantized_input_params *p) {
@@ -1833,11 +1999,17 @@ void *kbnn_context_tensor_ptr(const kbnn_context *ctx, int32_t tensor_id) {
     return ctx->tensor_ptrs[tensor_id];
 }
 
-int kbnn_model_run(kbnn_context *ctx) {
+int kbnn_model_run_from(kbnn_context *ctx, int32_t op_start) {
     if (ctx == NULL || ctx->model == NULL) {
         return -1;
     }
-    for (int32_t i = 0; i < ctx->model->op_count; ++i) {
+    if (op_start < 0) {
+        op_start = 0;
+    }
+    if (op_start > ctx->model->op_count) {
+        op_start = ctx->model->op_count;
+    }
+    for (int32_t i = op_start; i < ctx->model->op_count; ++i) {
         const kbnn_op *op = &ctx->model->ops[i];
 #ifdef KBNN_ENABLE_PROFILE
         uint64_t t0 = kbnn_now_ns();
@@ -1897,6 +2069,10 @@ int kbnn_model_run(kbnn_context *ctx) {
 #endif
     }
     return 0;
+}
+
+int kbnn_model_run(kbnn_context *ctx) {
+    return kbnn_model_run_from(ctx, 0);
 }
 
 static float kbnn_iou(const kbnn_detection *a, const kbnn_detection *b) {

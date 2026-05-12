@@ -17,7 +17,6 @@ import numpy as np
 sys.path.insert(0, "/home/claude/source/yolovxnor")
 
 from kerasbnn.generated_runtime import predict_bundle_outputs
-from kerasbnn.export_calibration import build_export_array_overrides
 from binary_yolo.tinier_yolo_xnor2 import TinierXNOR2Config, build_binary_tinier_yolov3_xnor2
 from binary_yolo.train_tinier import _prepare_split_samples
 import binary_yolo.yad2k_core as yad2k_core
@@ -58,9 +57,6 @@ def parse_args():
     ap.add_argument("--box-mode", default="linear", choices=("linear", "yolo"))
     ap.add_argument("--max-val-samples", type=int, default=0)
     ap.add_argument("--keep-export-dir", default="")
-    ap.add_argument("--calibrate-export", default="auto", choices=("auto", "none", "perlin_compare"))
-    ap.add_argument("--calibrate-images", type=int, default=4)
-    ap.add_argument("--calibrate-seed", type=int, default=43)
     return ap.parse_args()
 
 
@@ -162,7 +158,6 @@ def _predict_c_runtime(
     images: np.ndarray,
     export_dir: Path,
     model_name: str,
-    array_overrides: dict[str, np.ndarray] | None = None,
 ) -> tuple[dict[str, np.ndarray], dict]:
     return predict_bundle_outputs(
         model,
@@ -170,7 +165,6 @@ def _predict_c_runtime(
         output_dir=export_dir,
         model_name=model_name,
         repo_root=REPO_ROOT,
-        array_overrides=array_overrides,
     )
 
 
@@ -241,16 +235,6 @@ def main():
     keras_preds = _predict_named(model, val_images, args.batch_size, training=False)
     keras_map50 = _map50(val_samples, keras_preds, anchors, args, len(classes))
 
-    array_overrides, calibration_meta = build_export_array_overrides(
-        model,
-        model_name="fruits_xnor2_export",
-        mode=args.calibrate_export,
-        dataset=args.dataset,
-        checkpoint=str(weights_path),
-        calib_images=args.calibrate_images,
-        seed=args.calibrate_seed,
-    )
-
     if args.keep_export_dir:
         export_dir = Path(args.keep_export_dir)
         export_dir.mkdir(parents=True, exist_ok=True)
@@ -259,7 +243,6 @@ def main():
             val_images,
             export_dir,
             model_name="fruits_xnor2_export",
-            array_overrides=array_overrides,
         )
     else:
         with tempfile.TemporaryDirectory(prefix="kerasbnn_fruit_export_") as td:
@@ -268,7 +251,6 @@ def main():
                 val_images,
                 Path(td),
                 model_name="fruits_xnor2_export",
-                array_overrides=array_overrides,
             )
 
     c_map50 = _map50(val_samples, c_preds, anchors, args, len(classes))
@@ -292,8 +274,6 @@ def main():
         "pred_26_max_abs_diff": float(np.max(pred_26_diff)),
         "pred_26_mean_abs_diff": float(np.mean(pred_26_diff)),
         "export_outputs": [meta["tensors"][idx]["name"] for idx in meta["outputs"]],
-        "calibration": calibration_meta,
-        "override_count": len(array_overrides),
     }
     print(json.dumps(result, indent=2, sort_keys=True))
 
