@@ -1,0 +1,4111 @@
+{
+  "arena_bytes": 20139520,
+  "inputs": [
+    0
+  ],
+  "model_name": "fruits_example",
+  "ops": [
+    {
+      "input": 0,
+      "kind": "KBNN_OP_THERMO_INPUT",
+      "name": "binary_input",
+      "output": 1,
+      "shape": [
+        256,
+        256,
+        12
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        256,
+        256,
+        12
+      ],
+      "input": 1,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "conv1",
+      "out_channels": 16,
+      "output": 2,
+      "scratch_id": 3,
+      "shape": [
+        128,
+        128,
+        16
+      ],
+      "stride": [
+        2,
+        2
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        128,
+        128,
+        16
+      ],
+      "input": 2,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "conv2",
+      "out_channels": 32,
+      "output": 4,
+      "scratch_id": 5,
+      "shape": [
+        64,
+        64,
+        32
+      ],
+      "stride": [
+        2,
+        2
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        64,
+        64,
+        32
+      ],
+      "input": 4,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "conv3",
+      "out_channels": 64,
+      "output": 6,
+      "scratch_id": 7,
+      "shape": [
+        32,
+        32,
+        64
+      ],
+      "stride": [
+        2,
+        2
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        32,
+        32,
+        64
+      ],
+      "input": 6,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "conv4",
+      "out_channels": 128,
+      "output": 8,
+      "scratch_id": 9,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "stride": [
+        2,
+        2
+      ]
+    },
+    {
+      "channel_words": 2,
+      "in_shape": [
+        16,
+        16,
+        128
+      ],
+      "input": 8,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "conv5",
+      "out_channels": 256,
+      "output": 10,
+      "scratch_id": 11,
+      "shape": [
+        16,
+        16,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 4,
+      "in_shape": [
+        16,
+        16,
+        256
+      ],
+      "input": 10,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "down5",
+      "out_channels": 256,
+      "output": 12,
+      "scratch_id": 13,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        2,
+        2
+      ]
+    },
+    {
+      "channel_words": 4,
+      "in_shape": [
+        8,
+        8,
+        256
+      ],
+      "input": 12,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire1_sq",
+      "out_channels": 64,
+      "output": 14,
+      "scratch_id": 15,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 14,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire1_e1",
+      "out_channels": 256,
+      "output": 16,
+      "scratch_id": 17,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 14,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire1_e3",
+      "out_channels": 256,
+      "output": 18,
+      "scratch_id": 19,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "inputs": [
+        16,
+        18
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "fire1_out",
+      "output": 20,
+      "shape": [
+        8,
+        8,
+        512
+      ]
+    },
+    {
+      "inputs": [
+        20,
+        12
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "dense1",
+      "output": 21,
+      "shape": [
+        8,
+        8,
+        768
+      ]
+    },
+    {
+      "channel_words": 12,
+      "in_shape": [
+        8,
+        8,
+        768
+      ],
+      "input": 21,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire2_sq",
+      "out_channels": 64,
+      "output": 22,
+      "scratch_id": 23,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 22,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire2_e1",
+      "out_channels": 256,
+      "output": 24,
+      "scratch_id": 25,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 22,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire2_e3",
+      "out_channels": 256,
+      "output": 26,
+      "scratch_id": 27,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "inputs": [
+        24,
+        26
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "fire2_out",
+      "output": 28,
+      "shape": [
+        8,
+        8,
+        512
+      ]
+    },
+    {
+      "inputs": [
+        28,
+        21
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "dense2",
+      "output": 29,
+      "shape": [
+        8,
+        8,
+        1280
+      ]
+    },
+    {
+      "channel_words": 20,
+      "in_shape": [
+        8,
+        8,
+        1280
+      ],
+      "input": 29,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire3_sq",
+      "out_channels": 64,
+      "output": 30,
+      "scratch_id": 31,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 30,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire3_e1",
+      "out_channels": 256,
+      "output": 32,
+      "scratch_id": 33,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 30,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire3_e3",
+      "out_channels": 256,
+      "output": 34,
+      "scratch_id": 35,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "inputs": [
+        32,
+        34
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "fire3_out",
+      "output": 36,
+      "shape": [
+        8,
+        8,
+        512
+      ]
+    },
+    {
+      "inputs": [
+        36,
+        29
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "dense3",
+      "output": 37,
+      "shape": [
+        8,
+        8,
+        1792
+      ]
+    },
+    {
+      "channel_words": 28,
+      "in_shape": [
+        8,
+        8,
+        1792
+      ],
+      "input": 37,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire4_sq",
+      "out_channels": 64,
+      "output": 38,
+      "scratch_id": 39,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 38,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire4_e1",
+      "out_channels": 256,
+      "output": 40,
+      "scratch_id": 41,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 38,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire4_e3",
+      "out_channels": 256,
+      "output": 42,
+      "scratch_id": 43,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "inputs": [
+        40,
+        42
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "fire4_out",
+      "output": 44,
+      "shape": [
+        8,
+        8,
+        512
+      ]
+    },
+    {
+      "inputs": [
+        44,
+        37
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "dense4",
+      "output": 45,
+      "shape": [
+        8,
+        8,
+        2304
+      ]
+    },
+    {
+      "channel_words": 36,
+      "in_shape": [
+        8,
+        8,
+        2304
+      ],
+      "input": 45,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire5_sq",
+      "out_channels": 64,
+      "output": 46,
+      "scratch_id": 47,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 4,
+      "in_shape": [
+        16,
+        16,
+        256
+      ],
+      "input": 10,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "passthrough_reduce",
+      "out_channels": 64,
+      "output": 48,
+      "scratch_id": 49,
+      "shape": [
+        16,
+        16,
+        64
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 46,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire5_e1",
+      "out_channels": 256,
+      "output": 50,
+      "scratch_id": 51,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 46,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire5_e3",
+      "out_channels": 256,
+      "output": 52,
+      "scratch_id": 53,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "input": 48,
+      "kind": "KBNN_OP_SPACE_TO_DEPTH",
+      "name": "passthrough_reorg",
+      "output": 54,
+      "shape": [
+        8,
+        8,
+        256
+      ]
+    },
+    {
+      "inputs": [
+        50,
+        52
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "fire5_out",
+      "output": 55,
+      "shape": [
+        8,
+        8,
+        512
+      ]
+    },
+    {
+      "inputs": [
+        54,
+        55
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "head1_in",
+      "output": 56,
+      "shape": [
+        8,
+        8,
+        768
+      ]
+    },
+    {
+      "channel_words": 12,
+      "in_shape": [
+        8,
+        8,
+        768
+      ],
+      "input": 56,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire6_sq",
+      "out_channels": 64,
+      "output": 57,
+      "scratch_id": 58,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 57,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire6_e1",
+      "out_channels": 256,
+      "output": 59,
+      "scratch_id": 60,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 57,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire6_e3",
+      "out_channels": 256,
+      "output": 61,
+      "scratch_id": 62,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "inputs": [
+        59,
+        61
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "fire6_out",
+      "output": 63,
+      "shape": [
+        8,
+        8,
+        512
+      ]
+    },
+    {
+      "channel_words": 8,
+      "in_shape": [
+        8,
+        8,
+        512
+      ],
+      "input": 63,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "up_reduce",
+      "out_channels": 128,
+      "output": 64,
+      "scratch_id": 65,
+      "shape": [
+        8,
+        8,
+        128
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "input": 64,
+      "kind": "KBNN_OP_UPSAMPLE2D",
+      "name": "upsample",
+      "output": 66,
+      "shape": [
+        16,
+        16,
+        128
+      ]
+    },
+    {
+      "inputs": [
+        66,
+        10
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "head2_in",
+      "output": 67,
+      "shape": [
+        16,
+        16,
+        384
+      ]
+    },
+    {
+      "channel_words": 6,
+      "in_shape": [
+        16,
+        16,
+        384
+      ],
+      "input": 67,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire7_sq",
+      "out_channels": 32,
+      "output": 68,
+      "scratch_id": 69,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        16,
+        16,
+        32
+      ],
+      "input": 68,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire7_e1",
+      "out_channels": 128,
+      "output": 70,
+      "scratch_id": 71,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        16,
+        16,
+        32
+      ],
+      "input": 68,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire7_e3",
+      "out_channels": 128,
+      "output": 72,
+      "scratch_id": 73,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "inputs": [
+        70,
+        72
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "fire7_out",
+      "output": 74,
+      "shape": [
+        16,
+        16,
+        256
+      ]
+    },
+    {
+      "inputs": [
+        74,
+        67
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "dense7",
+      "output": 75,
+      "shape": [
+        16,
+        16,
+        640
+      ]
+    },
+    {
+      "channel_words": 10,
+      "in_shape": [
+        16,
+        16,
+        640
+      ],
+      "input": 75,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire8_sq",
+      "out_channels": 32,
+      "output": 76,
+      "scratch_id": 77,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        16,
+        16,
+        32
+      ],
+      "input": 76,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire8_e1",
+      "out_channels": 128,
+      "output": 78,
+      "scratch_id": 79,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        16,
+        16,
+        32
+      ],
+      "input": 76,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire8_e3",
+      "out_channels": 128,
+      "output": 80,
+      "scratch_id": 81,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "inputs": [
+        78,
+        80
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "fire8_out",
+      "output": 82,
+      "shape": [
+        16,
+        16,
+        256
+      ]
+    },
+    {
+      "inputs": [
+        63,
+        56
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "head1_dense",
+      "output": 83,
+      "shape": [
+        8,
+        8,
+        1280
+      ]
+    },
+    {
+      "inputs": [
+        82,
+        75
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "dense8",
+      "output": 84,
+      "shape": [
+        16,
+        16,
+        896
+      ]
+    },
+    {
+      "channel_words": 20,
+      "in_shape": [
+        8,
+        8,
+        1280
+      ],
+      "input": 83,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire9_sq",
+      "out_channels": 64,
+      "output": 85,
+      "scratch_id": 86,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 14,
+      "in_shape": [
+        16,
+        16,
+        896
+      ],
+      "input": 84,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire11_sq",
+      "out_channels": 32,
+      "output": 87,
+      "scratch_id": 88,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 85,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire9_e1",
+      "out_channels": 256,
+      "output": 89,
+      "scratch_id": 90,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 85,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire9_e3",
+      "out_channels": 256,
+      "output": 91,
+      "scratch_id": 92,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        16,
+        16,
+        32
+      ],
+      "input": 87,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire11_e1",
+      "out_channels": 128,
+      "output": 93,
+      "scratch_id": 94,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        16,
+        16,
+        32
+      ],
+      "input": 87,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire11_e3",
+      "out_channels": 128,
+      "output": 95,
+      "scratch_id": 96,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "inputs": [
+        89,
+        91
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "fire9_out",
+      "output": 97,
+      "shape": [
+        8,
+        8,
+        512
+      ]
+    },
+    {
+      "inputs": [
+        93,
+        95
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "fire11_out",
+      "output": 98,
+      "shape": [
+        16,
+        16,
+        256
+      ]
+    },
+    {
+      "inputs": [
+        97,
+        83
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "dense9",
+      "output": 99,
+      "shape": [
+        8,
+        8,
+        1792
+      ]
+    },
+    {
+      "inputs": [
+        98,
+        84
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "dense11",
+      "output": 100,
+      "shape": [
+        16,
+        16,
+        1152
+      ]
+    },
+    {
+      "channel_words": 28,
+      "in_shape": [
+        8,
+        8,
+        1792
+      ],
+      "input": 99,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire10_sq",
+      "out_channels": 64,
+      "output": 101,
+      "scratch_id": 102,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 18,
+      "in_shape": [
+        16,
+        16,
+        1152
+      ],
+      "input": 100,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire12_sq",
+      "out_channels": 32,
+      "output": 103,
+      "scratch_id": 104,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 101,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire10_e1",
+      "out_channels": 256,
+      "output": 105,
+      "scratch_id": 106,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        8,
+        8,
+        64
+      ],
+      "input": 101,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire10_e3",
+      "out_channels": 256,
+      "output": 107,
+      "scratch_id": 108,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        16,
+        16,
+        32
+      ],
+      "input": 103,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire12_e1",
+      "out_channels": 128,
+      "output": 109,
+      "scratch_id": 110,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 1,
+      "in_shape": [
+        16,
+        16,
+        32
+      ],
+      "input": 103,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "fire12_e3",
+      "out_channels": 128,
+      "output": 111,
+      "scratch_id": 112,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "inputs": [
+        105,
+        107
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "fire10_out",
+      "output": 113,
+      "shape": [
+        8,
+        8,
+        512
+      ]
+    },
+    {
+      "inputs": [
+        109,
+        111
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "fire12_out",
+      "output": 114,
+      "shape": [
+        16,
+        16,
+        256
+      ]
+    },
+    {
+      "inputs": [
+        113,
+        99
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "dense10",
+      "output": 115,
+      "shape": [
+        8,
+        8,
+        2304
+      ]
+    },
+    {
+      "inputs": [
+        114,
+        100
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "dense12",
+      "output": 116,
+      "shape": [
+        16,
+        16,
+        1408
+      ]
+    },
+    {
+      "channel_words": 36,
+      "in_shape": [
+        8,
+        8,
+        2304
+      ],
+      "input": 115,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "pred_13_pre",
+      "out_channels": 256,
+      "output": 117,
+      "scratch_id": 118,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 22,
+      "in_shape": [
+        16,
+        16,
+        1408
+      ],
+      "input": 116,
+      "kernel": [
+        3,
+        3
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "pred_26_pre",
+      "out_channels": 256,
+      "output": 119,
+      "scratch_id": 120,
+      "shape": [
+        16,
+        16,
+        256
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 4,
+      "in_shape": [
+        8,
+        8,
+        256
+      ],
+      "input": 117,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "pred_13_proj",
+      "out_channels": 192,
+      "output": 121,
+      "scratch_id": 122,
+      "shape": [
+        8,
+        8,
+        192
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "channel_words": 4,
+      "in_shape": [
+        16,
+        16,
+        256
+      ],
+      "input": 119,
+      "kernel": [
+        1,
+        1
+      ],
+      "kind": "KBNN_OP_XNOR_CONV2D",
+      "name": "pred_26_proj",
+      "out_channels": 192,
+      "output": 123,
+      "scratch_id": 124,
+      "shape": [
+        16,
+        16,
+        192
+      ],
+      "stride": [
+        1,
+        1
+      ]
+    },
+    {
+      "input": 121,
+      "kind": "KBNN_OP_QUANT_ACT",
+      "name": "pred_13_proj_quant",
+      "output": 125,
+      "shape": [
+        8,
+        8,
+        192
+      ]
+    },
+    {
+      "input": 123,
+      "kind": "KBNN_OP_QUANT_ACT",
+      "name": "pred_26_proj_quant",
+      "output": 126,
+      "shape": [
+        16,
+        16,
+        192
+      ]
+    },
+    {
+      "in_dim": 64,
+      "input": 127,
+      "kind": "KBNN_OP_QDENSE",
+      "name": "pred_13_obj_hidden",
+      "out_dim": 128,
+      "outer_count": 192,
+      "output": 129,
+      "shape": [
+        8,
+        8,
+        3,
+        128
+      ],
+      "weight_divisor": 128
+    },
+    {
+      "in_dim": 64,
+      "input": 128,
+      "kind": "KBNN_OP_QDENSE",
+      "name": "pred_26_obj_hidden",
+      "out_dim": 128,
+      "outer_count": 768,
+      "output": 130,
+      "shape": [
+        16,
+        16,
+        3,
+        128
+      ],
+      "weight_divisor": 128
+    },
+    {
+      "act_levels": 128,
+      "in_dim": 128,
+      "input": 129,
+      "kind": "KBNN_OP_QACT_QDENSE",
+      "name": "pred_13_obj_remap",
+      "out_dim": 64,
+      "outer_count": 192,
+      "output": 131,
+      "shape": [
+        8,
+        8,
+        3,
+        64
+      ],
+      "weight_divisor": 128
+    },
+    {
+      "in_dim": 64,
+      "input": 127,
+      "kind": "KBNN_OP_QDENSE",
+      "name": "pred_13_cls_hidden",
+      "out_dim": 128,
+      "outer_count": 192,
+      "output": 132,
+      "shape": [
+        8,
+        8,
+        3,
+        128
+      ],
+      "weight_divisor": 128
+    },
+    {
+      "act_levels": 128,
+      "in_dim": 128,
+      "input": 130,
+      "kind": "KBNN_OP_QACT_QDENSE",
+      "name": "pred_26_obj_remap",
+      "out_dim": 64,
+      "outer_count": 768,
+      "output": 133,
+      "shape": [
+        16,
+        16,
+        3,
+        64
+      ],
+      "weight_divisor": 128
+    },
+    {
+      "in_dim": 64,
+      "input": 128,
+      "kind": "KBNN_OP_QDENSE",
+      "name": "pred_26_cls_hidden",
+      "out_dim": 128,
+      "outer_count": 768,
+      "output": 134,
+      "shape": [
+        16,
+        16,
+        3,
+        128
+      ],
+      "weight_divisor": 128
+    },
+    {
+      "input": 131,
+      "kind": "KBNN_OP_QUANT_ACT",
+      "name": "pred_13_obj_remap_act",
+      "output": 135,
+      "shape": [
+        8,
+        8,
+        3,
+        64
+      ]
+    },
+    {
+      "input": 132,
+      "kind": "KBNN_OP_QUANT_ACT",
+      "name": "pred_13_cls_hidden_act",
+      "output": 136,
+      "shape": [
+        8,
+        8,
+        3,
+        128
+      ]
+    },
+    {
+      "input": 133,
+      "kind": "KBNN_OP_QUANT_ACT",
+      "name": "pred_26_obj_remap_act",
+      "output": 137,
+      "shape": [
+        16,
+        16,
+        3,
+        64
+      ]
+    },
+    {
+      "input": 134,
+      "kind": "KBNN_OP_QUANT_ACT",
+      "name": "pred_26_cls_hidden_act",
+      "output": 138,
+      "shape": [
+        16,
+        16,
+        3,
+        128
+      ]
+    },
+    {
+      "input": 127,
+      "kind": "KBNN_OP_BINARY_AFFINE_NORM",
+      "name": "pred_13_bbox_prep_norm",
+      "output": 139,
+      "shape": [
+        8,
+        8,
+        3,
+        64
+      ]
+    },
+    {
+      "input": 135,
+      "kind": "KBNN_OP_BINARY_AFFINE_NORM",
+      "name": "pred_13_obj_prep_norm",
+      "output": 140,
+      "shape": [
+        8,
+        8,
+        3,
+        64
+      ]
+    },
+    {
+      "input": 136,
+      "kind": "KBNN_OP_BINARY_AFFINE_NORM",
+      "name": "pred_13_cls_prep_norm",
+      "output": 141,
+      "shape": [
+        8,
+        8,
+        3,
+        128
+      ]
+    },
+    {
+      "input": 128,
+      "kind": "KBNN_OP_BINARY_AFFINE_NORM",
+      "name": "pred_26_bbox_prep_norm",
+      "output": 142,
+      "shape": [
+        16,
+        16,
+        3,
+        64
+      ]
+    },
+    {
+      "input": 137,
+      "kind": "KBNN_OP_BINARY_AFFINE_NORM",
+      "name": "pred_26_obj_prep_norm",
+      "output": 143,
+      "shape": [
+        16,
+        16,
+        3,
+        64
+      ]
+    },
+    {
+      "input": 138,
+      "kind": "KBNN_OP_BINARY_AFFINE_NORM",
+      "name": "pred_26_cls_prep_norm",
+      "output": 144,
+      "shape": [
+        16,
+        16,
+        3,
+        128
+      ]
+    },
+    {
+      "act_levels": 128,
+      "in_dim": 64,
+      "input": 139,
+      "kind": "KBNN_OP_QACT_QDENSE",
+      "name": "pred_13_bbox",
+      "out_dim": 4,
+      "outer_count": 192,
+      "output": 145,
+      "shape": [
+        8,
+        8,
+        3,
+        4
+      ],
+      "weight_divisor": 1
+    },
+    {
+      "act_levels": 128,
+      "in_dim": 64,
+      "input": 140,
+      "kind": "KBNN_OP_QACT_QDENSE",
+      "name": "pred_13_obj",
+      "out_dim": 1,
+      "outer_count": 192,
+      "output": 146,
+      "shape": [
+        8,
+        8,
+        3,
+        1
+      ],
+      "weight_divisor": 1
+    },
+    {
+      "act_levels": 128,
+      "in_dim": 128,
+      "input": 141,
+      "kind": "KBNN_OP_QACT_QDENSE",
+      "name": "pred_13_cls",
+      "out_dim": 4,
+      "outer_count": 192,
+      "output": 147,
+      "shape": [
+        8,
+        8,
+        3,
+        4
+      ],
+      "weight_divisor": 1
+    },
+    {
+      "act_levels": 128,
+      "in_dim": 64,
+      "input": 142,
+      "kind": "KBNN_OP_QACT_QDENSE",
+      "name": "pred_26_bbox",
+      "out_dim": 4,
+      "outer_count": 768,
+      "output": 148,
+      "shape": [
+        16,
+        16,
+        3,
+        4
+      ],
+      "weight_divisor": 1
+    },
+    {
+      "act_levels": 128,
+      "in_dim": 64,
+      "input": 143,
+      "kind": "KBNN_OP_QACT_QDENSE",
+      "name": "pred_26_obj",
+      "out_dim": 1,
+      "outer_count": 768,
+      "output": 149,
+      "shape": [
+        16,
+        16,
+        3,
+        1
+      ],
+      "weight_divisor": 1
+    },
+    {
+      "act_levels": 128,
+      "in_dim": 128,
+      "input": 144,
+      "kind": "KBNN_OP_QACT_QDENSE",
+      "name": "pred_26_cls",
+      "out_dim": 4,
+      "outer_count": 768,
+      "output": 150,
+      "shape": [
+        16,
+        16,
+        3,
+        4
+      ],
+      "weight_divisor": 1
+    },
+    {
+      "inputs": [
+        145,
+        146,
+        147
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "pred_13_concat",
+      "output": 151,
+      "shape": [
+        8,
+        8,
+        3,
+        9
+      ]
+    },
+    {
+      "inputs": [
+        148,
+        149,
+        150
+      ],
+      "kind": "KBNN_OP_CONCAT",
+      "name": "pred_26_concat",
+      "output": 152,
+      "shape": [
+        16,
+        16,
+        3,
+        9
+      ]
+    }
+  ],
+  "outputs": [
+    153,
+    154
+  ],
+  "tensors": [
+    {
+      "bytes": 0,
+      "kind": "KBNN_TENSOR_EXTERNAL_F32",
+      "name": "image",
+      "offset_bytes": 0,
+      "rank": 3,
+      "shape": [
+        256,
+        256,
+        3
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 524288,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "binary_input",
+      "offset_bytes": 0,
+      "rank": 3,
+      "shape": [
+        256,
+        256,
+        12
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 1048576,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "conv1",
+      "offset_bytes": 524288,
+      "rank": 3,
+      "shape": [
+        128,
+        128,
+        16
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 524288,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "conv1_packed",
+      "offset_bytes": 1572864,
+      "rank": 3,
+      "shape": [
+        256,
+        256,
+        12
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 524288,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "conv2",
+      "offset_bytes": 2097152,
+      "rank": 3,
+      "shape": [
+        64,
+        64,
+        32
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "conv2_packed",
+      "offset_bytes": 2621440,
+      "rank": 3,
+      "shape": [
+        128,
+        128,
+        16
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 262144,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "conv3",
+      "offset_bytes": 2752512,
+      "rank": 3,
+      "shape": [
+        32,
+        32,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 32768,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "conv3_packed",
+      "offset_bytes": 3014656,
+      "rank": 3,
+      "shape": [
+        64,
+        64,
+        32
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "conv4",
+      "offset_bytes": 3047424,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 8192,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "conv4_packed",
+      "offset_bytes": 3178496,
+      "rank": 3,
+      "shape": [
+        32,
+        32,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 262144,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "conv5",
+      "offset_bytes": 3186688,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 4096,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "conv5_packed",
+      "offset_bytes": 3448832,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "words_per_point": 2
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "down5",
+      "offset_bytes": 3452928,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 8192,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "down5_packed",
+      "offset_bytes": 3518464,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        256
+      ],
+      "words_per_point": 4
+    },
+    {
+      "bytes": 16384,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire1_sq",
+      "offset_bytes": 3526656,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 2048,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire1_sq_packed",
+      "offset_bytes": 3543040,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 4
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire1_e1",
+      "offset_bytes": 3545088,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire1_e1_packed",
+      "offset_bytes": 3610624,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire1_e3",
+      "offset_bytes": 3611136,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire1_e3_packed",
+      "offset_bytes": 3676672,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire1_out",
+      "offset_bytes": 3677184,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        512
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 196608,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "dense1",
+      "offset_bytes": 3808256,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        768
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 16384,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire2_sq",
+      "offset_bytes": 4004864,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 6144,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire2_sq_packed",
+      "offset_bytes": 4021248,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        768
+      ],
+      "words_per_point": 12
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire2_e1",
+      "offset_bytes": 4027392,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire2_e1_packed",
+      "offset_bytes": 4092928,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire2_e3",
+      "offset_bytes": 4093440,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire2_e3_packed",
+      "offset_bytes": 4158976,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire2_out",
+      "offset_bytes": 4159488,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        512
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 327680,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "dense2",
+      "offset_bytes": 4290560,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        1280
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 16384,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire3_sq",
+      "offset_bytes": 4618240,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 10240,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire3_sq_packed",
+      "offset_bytes": 4634624,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        1280
+      ],
+      "words_per_point": 20
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire3_e1",
+      "offset_bytes": 4644864,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire3_e1_packed",
+      "offset_bytes": 4710400,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire3_e3",
+      "offset_bytes": 4710912,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire3_e3_packed",
+      "offset_bytes": 4776448,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire3_out",
+      "offset_bytes": 4776960,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        512
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 458752,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "dense3",
+      "offset_bytes": 4908032,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        1792
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 16384,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire4_sq",
+      "offset_bytes": 5366784,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 14336,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire4_sq_packed",
+      "offset_bytes": 5383168,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        1792
+      ],
+      "words_per_point": 28
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire4_e1",
+      "offset_bytes": 5397504,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire4_e1_packed",
+      "offset_bytes": 5463040,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire4_e3",
+      "offset_bytes": 5463552,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire4_e3_packed",
+      "offset_bytes": 5529088,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire4_out",
+      "offset_bytes": 5529600,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        512
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 589824,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "dense4",
+      "offset_bytes": 5660672,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        2304
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 16384,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire5_sq",
+      "offset_bytes": 6250496,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 18432,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire5_sq_packed",
+      "offset_bytes": 6266880,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        2304
+      ],
+      "words_per_point": 36
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "passthrough_reduce",
+      "offset_bytes": 6285312,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 8192,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "passthrough_reduce_packed",
+      "offset_bytes": 6350848,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        256
+      ],
+      "words_per_point": 4
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire5_e1",
+      "offset_bytes": 6359040,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire5_e1_packed",
+      "offset_bytes": 6424576,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire5_e3",
+      "offset_bytes": 6425088,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire5_e3_packed",
+      "offset_bytes": 6490624,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "passthrough_reorg",
+      "offset_bytes": 6491136,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire5_out",
+      "offset_bytes": 6556672,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        512
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 196608,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "head1_in",
+      "offset_bytes": 6687744,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        768
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 16384,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire6_sq",
+      "offset_bytes": 6884352,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 6144,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire6_sq_packed",
+      "offset_bytes": 6900736,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        768
+      ],
+      "words_per_point": 12
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire6_e1",
+      "offset_bytes": 6906880,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire6_e1_packed",
+      "offset_bytes": 6972416,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire6_e3",
+      "offset_bytes": 6972928,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire6_e3_packed",
+      "offset_bytes": 7038464,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire6_out",
+      "offset_bytes": 7038976,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        512
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 32768,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "up_reduce",
+      "offset_bytes": 7170048,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 4096,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "up_reduce_packed",
+      "offset_bytes": 7202816,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        512
+      ],
+      "words_per_point": 8
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "upsample",
+      "offset_bytes": 7206912,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 393216,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "head2_in",
+      "offset_bytes": 7337984,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        384
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 32768,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire7_sq",
+      "offset_bytes": 7731200,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 12288,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire7_sq_packed",
+      "offset_bytes": 7763968,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        384
+      ],
+      "words_per_point": 6
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire7_e1",
+      "offset_bytes": 7776256,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 2048,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire7_e1_packed",
+      "offset_bytes": 7907328,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire7_e3",
+      "offset_bytes": 7909376,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 2048,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire7_e3_packed",
+      "offset_bytes": 8040448,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 262144,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire7_out",
+      "offset_bytes": 8042496,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 655360,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "dense7",
+      "offset_bytes": 8304640,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        640
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 32768,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire8_sq",
+      "offset_bytes": 8960000,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 20480,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire8_sq_packed",
+      "offset_bytes": 8992768,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        640
+      ],
+      "words_per_point": 10
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire8_e1",
+      "offset_bytes": 9013248,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 2048,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire8_e1_packed",
+      "offset_bytes": 9144320,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire8_e3",
+      "offset_bytes": 9146368,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 2048,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire8_e3_packed",
+      "offset_bytes": 9277440,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 262144,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire8_out",
+      "offset_bytes": 9279488,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 327680,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "head1_dense",
+      "offset_bytes": 9541632,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        1280
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 917504,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "dense8",
+      "offset_bytes": 9869312,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        896
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 16384,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire9_sq",
+      "offset_bytes": 10786816,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 10240,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire9_sq_packed",
+      "offset_bytes": 10803200,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        1280
+      ],
+      "words_per_point": 20
+    },
+    {
+      "bytes": 32768,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire11_sq",
+      "offset_bytes": 10813440,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 28672,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire11_sq_packed",
+      "offset_bytes": 10846208,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        896
+      ],
+      "words_per_point": 14
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire9_e1",
+      "offset_bytes": 10874880,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire9_e1_packed",
+      "offset_bytes": 10940416,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire9_e3",
+      "offset_bytes": 10940928,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire9_e3_packed",
+      "offset_bytes": 11006464,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire11_e1",
+      "offset_bytes": 11006976,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 2048,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire11_e1_packed",
+      "offset_bytes": 11138048,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire11_e3",
+      "offset_bytes": 11140096,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 2048,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire11_e3_packed",
+      "offset_bytes": 11271168,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire9_out",
+      "offset_bytes": 11273216,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        512
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 262144,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire11_out",
+      "offset_bytes": 11404288,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 458752,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "dense9",
+      "offset_bytes": 11666432,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        1792
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 1179648,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "dense11",
+      "offset_bytes": 12125184,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        1152
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 16384,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire10_sq",
+      "offset_bytes": 13304832,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 14336,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire10_sq_packed",
+      "offset_bytes": 13321216,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        1792
+      ],
+      "words_per_point": 28
+    },
+    {
+      "bytes": 32768,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire12_sq",
+      "offset_bytes": 13335552,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 36864,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire12_sq_packed",
+      "offset_bytes": 13368320,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        1152
+      ],
+      "words_per_point": 18
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire10_e1",
+      "offset_bytes": 13405184,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire10_e1_packed",
+      "offset_bytes": 13470720,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire10_e3",
+      "offset_bytes": 13471232,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 512,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire10_e3_packed",
+      "offset_bytes": 13536768,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        64
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire12_e1",
+      "offset_bytes": 13537280,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 2048,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire12_e1_packed",
+      "offset_bytes": 13668352,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire12_e3",
+      "offset_bytes": 13670400,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 2048,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "fire12_e3_packed",
+      "offset_bytes": 13801472,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        32
+      ],
+      "words_per_point": 1
+    },
+    {
+      "bytes": 131072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire10_out",
+      "offset_bytes": 13803520,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        512
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 262144,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "fire12_out",
+      "offset_bytes": 13934592,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 589824,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "dense10",
+      "offset_bytes": 14196736,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        2304
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 1441792,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "dense12",
+      "offset_bytes": 14786560,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        1408
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 65536,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_pre",
+      "offset_bytes": 16228352,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 18432,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "pred_13_pre_packed",
+      "offset_bytes": 16293888,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        2304
+      ],
+      "words_per_point": 36
+    },
+    {
+      "bytes": 262144,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_pre",
+      "offset_bytes": 16312320,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        256
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 45056,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "pred_26_pre_packed",
+      "offset_bytes": 16574464,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        1408
+      ],
+      "words_per_point": 22
+    },
+    {
+      "bytes": 49152,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_proj",
+      "offset_bytes": 16619520,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        192
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 2048,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "pred_13_proj_packed",
+      "offset_bytes": 16668672,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        256
+      ],
+      "words_per_point": 4
+    },
+    {
+      "bytes": 196608,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_proj",
+      "offset_bytes": 16670720,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        192
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 8192,
+      "kind": "KBNN_TENSOR_PACKED_BINARY",
+      "name": "pred_26_proj_packed",
+      "offset_bytes": 16867328,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        256
+      ],
+      "words_per_point": 4
+    },
+    {
+      "bytes": 49152,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_proj_quant",
+      "offset_bytes": 16875520,
+      "rank": 3,
+      "shape": [
+        8,
+        8,
+        192
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 196608,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_proj_quant",
+      "offset_bytes": 16924672,
+      "rank": 3,
+      "shape": [
+        16,
+        16,
+        192
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 49152,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_reshape",
+      "offset_bytes": 16875520,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 196608,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_reshape",
+      "offset_bytes": 16924672,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 98304,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_obj_hidden",
+      "offset_bytes": 17121280,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 393216,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_obj_hidden",
+      "offset_bytes": 17219584,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 49152,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_obj_remap",
+      "offset_bytes": 17612800,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 98304,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_cls_hidden",
+      "offset_bytes": 17661952,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 196608,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_obj_remap",
+      "offset_bytes": 17760256,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 393216,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_cls_hidden",
+      "offset_bytes": 17956864,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 49152,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_obj_remap_act",
+      "offset_bytes": 18350080,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 98304,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_cls_hidden_act",
+      "offset_bytes": 18399232,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 196608,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_obj_remap_act",
+      "offset_bytes": 18497536,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 393216,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_cls_hidden_act",
+      "offset_bytes": 18694144,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 49152,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_bbox_prep_norm",
+      "offset_bytes": 19087360,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 49152,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_obj_prep_norm",
+      "offset_bytes": 19136512,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 98304,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_cls_prep_norm",
+      "offset_bytes": 19185664,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 196608,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_bbox_prep_norm",
+      "offset_bytes": 19283968,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 196608,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_obj_prep_norm",
+      "offset_bytes": 19480576,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        64
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 393216,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_cls_prep_norm",
+      "offset_bytes": 19677184,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        128
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 3072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_bbox",
+      "offset_bytes": 20070400,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        4
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 768,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_obj",
+      "offset_bytes": 20073472,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        1
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 3072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_cls",
+      "offset_bytes": 20074240,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        4
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 12288,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_bbox",
+      "offset_bytes": 20077312,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        4
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 3072,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_obj",
+      "offset_bytes": 20089600,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        1
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 12288,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_cls",
+      "offset_bytes": 20092672,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        4
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 6912,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13_concat",
+      "offset_bytes": 20104960,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        9
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 27648,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26_concat",
+      "offset_bytes": 20111872,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        9
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 6912,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_13",
+      "offset_bytes": 20104960,
+      "rank": 4,
+      "shape": [
+        8,
+        8,
+        3,
+        9
+      ],
+      "words_per_point": 0
+    },
+    {
+      "bytes": 27648,
+      "kind": "KBNN_TENSOR_I32",
+      "name": "pred_26",
+      "offset_bytes": 20111872,
+      "rank": 4,
+      "shape": [
+        16,
+        16,
+        3,
+        9
+      ],
+      "words_per_point": 0
+    }
+  ]
+}
